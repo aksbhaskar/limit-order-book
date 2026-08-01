@@ -22,12 +22,12 @@ is only marked complete once the corresponding code and tests land.
 | Milestone | Description                                             | Status      |
 |-----------|---------------------------------------------------------|-------------|
 | 1         | Project initialisation (build, tests, layout)           | Done        |
-| 2         | Core order data structures and supporting value types   | Planned     |
+| 2         | Core order data structures and supporting value types   | Done        |
 | 3         | Price-time-priority limit order book                    | Planned     |
 | 4         | Matching engine producing trades / executions           | Planned     |
 | 5         | Order lifecycle: amend and cancel                       | Planned     |
 | 6         | Additional order types (market, IOC, FOK, ...)          | Planned     |
 | 7         | Benchmarks: throughput and latency characterisation     | Planned     |
 
-Only milestone 1 is implemented at present. Everything from milestone 2 onward is
-a plan, not a promise of existing functionality.
+Only milestones 1 and 2 are implemented at present. Everything from milestone 3
+onward is a plan, not a promise of existing functionality.

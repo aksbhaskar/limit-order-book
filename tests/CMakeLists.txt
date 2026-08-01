@@ -15,8 +15,13 @@ set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
 FetchContent_MakeAvailable(doctest)
 
 add_executable(unit_tests
+    doctest_main.cpp
     test_sanity.cpp
+    test_types.cpp
+    test_price.cpp
+    test_quantity.cpp
+    test_order.cpp
 )
-target_link_libraries(unit_tests PRIVATE lob_headers lob_warnings doctest::doctest)
+target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 
 add_test(NAME unit_tests COMMAND unit_tests)
