@@ -21,6 +21,8 @@ add_executable(unit_tests
     test_price.cpp
     test_quantity.cpp
     test_order.cpp
+    test_price_level.cpp
+    test_order_book.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 
