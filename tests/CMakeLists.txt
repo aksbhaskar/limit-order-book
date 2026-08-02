@@ -23,6 +23,8 @@ add_executable(unit_tests
     test_order.cpp
     test_price_level.cpp
     test_order_book.cpp
+    test_order_fill.cpp
+    test_matching_engine.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 

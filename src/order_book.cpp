@@ -67,4 +67,26 @@ std::vector<LevelView> OrderBook::depth(Side side, std::size_t max_levels) const
                              : collect_depth(asks_, max_levels);
 }
 
+void OrderBook::reduce_best(Side side, Quantity qty) {
+    if (side == Side::Buy) {
+        auto it = bids_.begin();
+        const auto result = it->second.reduce_front(qty);
+        if (result.order_completed) {
+            ids_.erase(result.completed_id);
+        }
+        if (it->second.empty()) {
+            bids_.erase(it);
+        }
+    } else {
+        auto it = asks_.begin();
+        const auto result = it->second.reduce_front(qty);
+        if (result.order_completed) {
+            ids_.erase(result.completed_id);
+        }
+        if (it->second.empty()) {
+            asks_.erase(it);
+        }
+    }
+}
+
 }  // namespace lob

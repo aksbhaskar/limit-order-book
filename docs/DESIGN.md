@@ -24,12 +24,12 @@ is only marked complete once the corresponding code and tests land.
 | 1         | Project initialisation (build, tests, layout)           | Done        |
 | 2         | Core order data structures and supporting value types   | Done        |
 | 3         | Price-time-priority limit order book                    | Done        |
-| 4         | Matching engine producing trades / executions           | Planned     |
+| 4         | Matching engine producing trades / executions           | Done        |
 | 5         | Order lifecycle: amend and cancel                       | Planned     |
 | 6         | Additional order types (market, IOC, FOK, ...)          | Planned     |
 | 7         | Benchmarks: throughput and latency characterisation     | Planned     |
 
-Only milestones 1–3 are implemented at present. Everything from milestone 4
+Only milestones 1–4 are implemented at present. Everything from milestone 5
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -73,5 +73,51 @@ price-time priority correctly.
 
 The book supports insertion (`add_order`), best-level access, exact-level lookup
 (`level_at`), level counts, and bounded depth snapshots (`depth`). It rejects
-non-limit orders and duplicate order ids. Matching, cancellation, and amendment
-are intentionally out of scope at this milestone.
+non-limit orders and duplicate order ids. Cancellation and amendment are out of
+scope; matching is layered on top by the engine below.
+
+## Matching engine
+
+The matching engine (`lob::MatchingEngine`) owns an `OrderBook` and turns an
+incoming order into executions plus, possibly, a new resting order. It
+implements continuous **price-time priority** matching for limit orders.
+
+### Submission algorithm
+
+`submit(order)` repeats the following while the order still has quantity:
+
+1. Look at the best level of the **opposite** side (`best_ask` for a buy,
+   `best_bid` for a sell). If that side is empty, stop.
+2. Check whether the prices **cross**: a buy crosses when its limit price is
+   `>=` the best ask; a sell crosses when its limit price is `<=` the best bid.
+   If they do not cross, stop.
+3. Take the **front** (oldest) order at that level — this is the highest-priority
+   maker by time. Execute `min(taker_remaining, maker_remaining)`.
+4. Record a `Trade` at the **maker's price**, reduce both orders, and remove the
+   maker (and the level, if now empty) when it is fully filled.
+
+When the loop ends, any remaining quantity is inserted into the book as a passive
+limit order, and a `SubmitResult` reports the trades, the filled and remaining
+quantities, and whether a remainder is now resting.
+
+### Execution semantics
+
+- **Price improvement goes to the taker.** Trades always execute at the resting
+  maker's displayed price, never at the incoming order's (possibly more
+  aggressive) price.
+- **Priority order.** Because the book yields levels best-first and each level
+  yields orders oldest-first, an incoming order consumes liquidity in strict
+  price-then-time order.
+- **Partial fills.** Either side may be partially filled: a large incoming order
+  walks multiple makers and levels; a large maker is left resting with a reduced
+  remaining quantity while preserving its original quantity and time priority.
+- **Full fills and cleanup.** Fully filled makers are popped from their level,
+  emptied levels are erased, and their ids are released from the book's index.
+- **Determinism.** The engine holds no hidden state; identical ordered input
+  always produces identical trades.
+
+### Scope
+
+Only limit-order matching is implemented. Market orders, cancellation,
+amend/replace, matching strategies, market making, and historical replay are out
+of scope at this milestone.

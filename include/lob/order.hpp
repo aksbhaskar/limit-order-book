@@ -6,14 +6,14 @@
 
 namespace lob {
 
-// An immutable description of a single resting/incoming order.
+// A single resting/incoming order.
 //
-// This is the foundational data structure the order book and matching engine
-// will be built on. It only *represents* an order and enforces its invariants;
-// it contains no matching, booking, or lifecycle logic (those arrive in later
-// milestones). The remaining-quantity field and sequence number are carried now
-// so that price-time priority and partial fills can be layered on without
-// changing this type's shape.
+// This is the foundational data structure the order book and matching engine are
+// built on. Its identifying fields (id, side, type, price, quantity, sequence)
+// are fixed at construction; only the remaining quantity changes, and only
+// through fill(), as the order executes. It enforces its own invariants but
+// contains no matching or booking policy — that lives in OrderBook and
+// MatchingEngine.
 //
 // Invariants enforced at construction (a violation throws std::invalid_argument):
 //   * id       != OrderId{0}          (0 is the reserved "invalid" id)
@@ -52,6 +52,12 @@ public:
 
     // True once nothing is left to fill.
     constexpr bool is_filled() const noexcept { return remaining_.is_zero(); }
+
+    // Applies a (partial or full) fill, reducing the remaining quantity by
+    // `quantity`. Throws std::invalid_argument if `quantity` is zero or exceeds
+    // the remaining quantity. The original quantity() is unchanged, preserving
+    // the invariant filled_quantity() + remaining_quantity() == quantity().
+    void fill(Quantity quantity);
 
 private:
     OrderId id_{};

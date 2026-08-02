@@ -33,8 +33,9 @@ struct LevelView {
 // begin() is always the best level and iteration walks levels from best to
 // worst in O(1) / in-order time. This makes the structure fully deterministic.
 //
-// This class only stores and reports resting orders. Matching, cancellation,
-// and other lifecycle operations are deliberately absent.
+// This class stores and reports resting orders, and exposes to the matching
+// engine (a friend) the single reduction primitive matching needs. Matching
+// policy itself lives in MatchingEngine; cancellation and amendment are absent.
 class OrderBook {
 public:
     // Adds a resting limit order. Throws std::invalid_argument if the order is
@@ -62,6 +63,14 @@ private:
     // Bids: highest price first. Asks: lowest price first.
     using BidMap = std::map<Price, PriceLevel, std::greater<Price>>;
     using AskMap = std::map<Price, PriceLevel, std::less<Price>>;
+
+    // Fills the FIFO-front order at the best level of `side` by `qty`, removing
+    // the order if it becomes fully filled and the level if it becomes empty.
+    // Precondition: that side is non-empty and qty <= front's remaining. Used by
+    // MatchingEngine to consume resting liquidity.
+    void reduce_best(Side side, Quantity qty);
+
+    friend class MatchingEngine;
 
     BidMap bids_;
     AskMap asks_;

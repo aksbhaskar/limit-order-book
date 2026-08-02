@@ -14,8 +14,8 @@ namespace lob {
 // priority. The order book guarantees that orders are appended in
 // non-decreasing sequence order, so back-insertion preserves time priority.
 //
-// This type stores and reports orders. The mutation needed for matching is
-// added in a later milestone; here a level is only grown, never reduced.
+// This type stores and reports orders, and supports the single reduction the
+// matching engine needs: filling the front (oldest) order.
 class PriceLevel {
 public:
     explicit PriceLevel(Price price) noexcept : price_(price) {}
@@ -38,6 +38,28 @@ public:
     void add(const Order& order) {
         total_quantity_ = total_quantity_ + order.remaining_quantity();
         orders_.push_back(order);
+    }
+
+    // Outcome of reducing the front order.
+    struct ReduceResult {
+        bool order_completed = false;   // front order was fully filled & removed
+        OrderId completed_id{};         // its id, valid iff order_completed
+    };
+
+    // Fills the front (oldest) order by `quantity`, updating the level's
+    // aggregate quantity. If that order becomes fully filled it is popped and
+    // its id is reported so callers can drop it from any index.
+    // Precondition: !empty() and quantity <= front().remaining_quantity().
+    ReduceResult reduce_front(Quantity quantity) {
+        Order& head = orders_.front();
+        total_quantity_ = total_quantity_ - quantity;
+        head.fill(quantity);
+        if (head.is_filled()) {
+            const OrderId id = head.id();
+            orders_.pop_front();
+            return {true, id};
+        }
+        return {false, OrderId{}};
     }
 
 private:

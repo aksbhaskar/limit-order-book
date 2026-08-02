@@ -9,6 +9,7 @@ target_compile_features(lob_headers INTERFACE cxx_std_20)
 add_library(lob
     order.cpp
     order_book.cpp
+    matching_engine.cpp
 )
 target_link_libraries(lob PUBLIC lob_headers)
 target_link_libraries(lob PRIVATE lob_warnings)

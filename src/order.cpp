@@ -28,4 +28,14 @@ Order::Order(OrderId id,
     }
 }
 
+void Order::fill(Quantity quantity) {
+    if (quantity.is_zero()) {
+        throw std::invalid_argument("fill quantity must be strictly positive");
+    }
+    if (quantity > remaining_) {
+        throw std::invalid_argument("fill quantity exceeds remaining quantity");
+    }
+    remaining_ = remaining_ - quantity;
+}
+
 }  // namespace lob
