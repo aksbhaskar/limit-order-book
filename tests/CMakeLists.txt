@@ -26,6 +26,7 @@ add_executable(unit_tests
     test_order_fill.cpp
     test_matching_engine.cpp
     test_cancellation.cpp
+    test_market_orders.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 

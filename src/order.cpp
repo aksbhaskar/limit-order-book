@@ -20,8 +20,10 @@ Order::Order(OrderId id,
     if (id_ == OrderId{0}) {
         throw std::invalid_argument("Order id must be non-zero");
     }
-    if (!price_.is_positive()) {
-        throw std::invalid_argument("Order price must be strictly positive");
+    // A limit order must name a positive price; a market order has no price and
+    // matches purely on available liquidity, so its price field is ignored.
+    if (type_ == OrderType::Limit && !price_.is_positive()) {
+        throw std::invalid_argument("Limit order price must be strictly positive");
     }
     if (quantity_.is_zero()) {
         throw std::invalid_argument("Order quantity must be strictly positive");

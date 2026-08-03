@@ -24,13 +24,19 @@ SubmitResult MatchingEngine::submit(Order order) {
 
     const Quantity original = order.quantity();
     const Side opposite = order.side() == Side::Buy ? Side::Sell : Side::Buy;
+    const bool is_market = order.type() == OrderType::Market;
 
-    // Consume resting liquidity while the order still has quantity and the best
-    // opposite level is priced such that the two cross.
+    // Consume resting liquidity while the order still has quantity. A market
+    // order takes whatever liquidity exists; a limit order stops as soon as the
+    // best opposite level no longer crosses its price. Either way it can only
+    // execute against liquidity that is actually present.
     while (!order.is_filled()) {
         const PriceLevel* best =
             opposite == Side::Sell ? book_.best_ask() : book_.best_bid();
-        if (best == nullptr || !crosses(order.side(), order.price(), best->price())) {
+        if (best == nullptr) {
+            break;
+        }
+        if (!is_market && !crosses(order.side(), order.price(), best->price())) {
             break;
         }
 
@@ -56,8 +62,10 @@ SubmitResult MatchingEngine::submit(Order order) {
     result.remaining_quantity = order.remaining_quantity();
     result.filled_quantity = original - order.remaining_quantity();
 
-    // Whatever is left rests as a passive limit order.
-    if (!order.is_filled()) {
+    // A limit order rests any unfilled remainder as passive liquidity; a market
+    // order never rests, so its remainder (if liquidity was insufficient) is
+    // simply left undone.
+    if (!order.is_filled() && !is_market) {
         book_.add_order(order);
         result.resting = true;
     }

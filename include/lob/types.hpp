@@ -11,11 +11,18 @@ enum class Side : std::uint8_t {
     Sell,
 };
 
-// The order's execution type. Only limit orders are modelled for now; the enum
-// exists so that later order types (market, IOC, FOK, ...) can be added without
+// The order's execution type.
+//
+//   * Limit  - executes only at its stated price or better, and rests on the
+//              book if it cannot fully match.
+//   * Market - executes against the best available liquidity regardless of
+//              price and never rests; any unfilled quantity is simply dropped.
+//
+// The enum is extensible so later types (IOC, FOK, ...) can be added without
 // touching call sites that already switch on the type.
 enum class OrderType : std::uint8_t {
     Limit,
+    Market,
 };
 
 // Strong identifier for an order. Modelled as a scoped enumeration so it carries
@@ -38,6 +45,8 @@ constexpr std::string_view to_string(OrderType type) noexcept {
     switch (type) {
         case OrderType::Limit:
             return "Limit";
+        case OrderType::Market:
+            return "Market";
     }
     return "Unknown";
 }

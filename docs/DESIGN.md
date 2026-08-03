@@ -26,12 +26,12 @@ is only marked complete once the corresponding code and tests land.
 | 3         | Price-time-priority limit order book                    | Done        |
 | 4         | Matching engine producing trades / executions           | Done        |
 | 5         | Order cancellation                                      | Done        |
-| 6         | Market orders                                           | Planned     |
+| 6         | Market orders                                           | Done        |
 | 7         | Order amend / replace                                   | Planned     |
 | 8         | Further order types (IOC, FOK, ...)                     | Planned     |
 | 9         | Benchmarks: throughput and latency characterisation     | Planned     |
 
-Only milestones 1–5 are implemented at present. Everything from milestone 6
+Only milestones 1–6 are implemented at present. Everything from milestone 7
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -168,3 +168,46 @@ longer provides liquidity.
 
 Cancellation covers resting limit orders. Amend/replace is still out of scope
 (modelled as cancel-and-resubmit for now).
+
+## Market orders
+
+A market order (`OrderType::Market`) executes immediately against the best
+available liquidity and **never rests** on the book. It is submitted through the
+same `MatchingEngine::submit` entry point and reuses the same strongly typed
+`Order` model — there is no separate, loosely typed market-order path.
+
+### Representation
+
+A market order carries no meaningful price, so its `Price` field is ignored and
+its construction skips the "price must be positive" check that applies to limit
+orders (quantity and id validity are still enforced). All other fields — id,
+side, quantity, sequence — are identical to a limit order's.
+
+### Matching behaviour
+
+Market and limit matching share one loop; they differ only in the stop condition
+and the fate of any remainder:
+
+- **Limit** matches while the best opposite level *crosses* its price, then rests
+  the remainder.
+- **Market** ignores price entirely: it keeps consuming the best opposite level
+  while any opposing liquidity remains, and rests nothing.
+
+Everything else is unchanged and shared:
+
+- **Price-time priority.** Levels are consumed best-first and, within a level,
+  oldest-first, exactly as for a limit taker.
+- **Maker-price execution.** Each trade prints at the resting maker's price; a
+  market order accepts whatever price the book offers.
+- **Bounded by liquidity.** A market order can never execute more than the total
+  resting quantity on the opposite side. When the opposite side empties, matching
+  stops:
+  - If it fully filled, the result is `fully_filled()` with `resting == false`.
+  - If liquidity was insufficient (or the book was empty), the unfilled quantity
+    is reported in `remaining_quantity`, `resting` is `false`, and nothing is
+    added to the book — the remainder is simply dropped.
+
+### Scope
+
+Market and limit orders are supported. Immediate-or-cancel and fill-or-kill
+variants, which build on the same machinery, remain future work.

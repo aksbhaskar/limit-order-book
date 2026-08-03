@@ -17,7 +17,8 @@ namespace lob {
 //
 // Invariants enforced at construction (a violation throws std::invalid_argument):
 //   * id       != OrderId{0}          (0 is the reserved "invalid" id)
-//   * price    is strictly positive   (limit orders must name a positive price)
+//   * price    is strictly positive   (limit orders only; a market order carries
+//                                      no price and its price field is ignored)
 //   * quantity is strictly positive   (an order for nothing is meaningless)
 // After construction the following always hold:
 //   * remaining_quantity() <= quantity()

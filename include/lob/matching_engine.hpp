@@ -23,14 +23,18 @@ struct SubmitResult {
 
 // A price-time-priority matching engine built on top of OrderBook.
 //
-// An incoming limit order is matched against the best levels of the opposite
-// side for as long as the prices cross, consuming resting orders in strict
-// price-then-time priority. Each fill executes at the resting (maker) order's
-// price. Any quantity that cannot be matched rests in the book as a new limit
-// order. The engine holds no other state, so behaviour is fully deterministic.
+// An incoming order is matched against the best levels of the opposite side,
+// consuming resting orders in strict price-then-time priority. Each fill
+// executes at the resting (maker) order's price. The two order types differ only
+// in when matching stops and what happens to any unfilled quantity:
 //
-// Only limit-order matching is implemented: no market orders, amendments, or
-// higher-level strategies. Resting orders may be cancelled by id.
+//   * Limit  - matches while the prices cross; any remainder rests on the book.
+//   * Market - matches against whatever liquidity exists regardless of price and
+//              never rests; if liquidity runs out, the remainder is dropped.
+//
+// The engine holds no other state, so behaviour is fully deterministic. Amend /
+// replace and higher-level strategies are not implemented. Resting orders may be
+// cancelled by id.
 class MatchingEngine {
 public:
     // Submits an order: matches it against the book and rests any remainder.
