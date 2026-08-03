@@ -25,11 +25,13 @@ is only marked complete once the corresponding code and tests land.
 | 2         | Core order data structures and supporting value types   | Done        |
 | 3         | Price-time-priority limit order book                    | Done        |
 | 4         | Matching engine producing trades / executions           | Done        |
-| 5         | Order lifecycle: amend and cancel                       | Planned     |
-| 6         | Additional order types (market, IOC, FOK, ...)          | Planned     |
-| 7         | Benchmarks: throughput and latency characterisation     | Planned     |
+| 5         | Order cancellation                                      | Done        |
+| 6         | Market orders                                           | Planned     |
+| 7         | Order amend / replace                                   | Planned     |
+| 8         | Further order types (IOC, FOK, ...)                     | Planned     |
+| 9         | Benchmarks: throughput and latency characterisation     | Planned     |
 
-Only milestones 1–4 are implemented at present. Everything from milestone 5
+Only milestones 1–5 are implemented at present. Everything from milestone 6
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -118,6 +120,51 @@ quantities, and whether a remainder is now resting.
 
 ### Scope
 
-Only limit-order matching is implemented. Market orders, cancellation,
-amend/replace, matching strategies, market making, and historical replay are out
-of scope at this milestone.
+Only limit-order matching is implemented. Market orders, amend/replace, matching
+strategies, market making, and historical replay are out of scope at this
+milestone. (Cancellation is covered in the next section.)
+
+## Cancellation
+
+A resting order can be withdrawn by id via `OrderBook::cancel` (exposed on the
+engine as `MatchingEngine::cancel`).
+
+### Locating an order
+
+The book keeps an id index, `std::map<OrderId, Locator>`, mapping every live
+order to the `(side, price)` of the level that holds it. Cancellation looks the
+id up in this index, jumps straight to the level, and removes the order — no
+scan of the whole book is needed. Within a level the order is found by a linear
+walk of that level's queue (levels are typically shallow); a future optimisation
+could store an iterator/handle to make this O(1).
+
+### Data-structure implications
+
+- **Aggregate quantity.** `PriceLevel::remove` subtracts the cancelled order's
+  *remaining* quantity from the level's cached aggregate, so depth stays exact.
+- **Empty-level removal.** If the level becomes empty it is erased from the side
+  map, so it no longer appears in best-of-book or depth queries.
+- **Time priority preserved.** Removing an order from the middle of the level's
+  `std::deque` keeps the relative order — and therefore the sequence numbers and
+  FIFO priority — of all remaining orders unchanged. The next order in line is
+  promoted naturally.
+
+### Result and rejections
+
+`cancel` returns a `CancelResult` with a `CancelStatus`:
+
+- **Cancelled** — the order was resting and has been removed; the result carries
+  the removed remaining quantity.
+- **AlreadyFilled** — the id belonged to an order that rested but has since been
+  fully filled. The book remembers ids of orders that filled while resting, so
+  this case is reported distinctly rather than as "not found".
+- **NotFound** — no such order is or ever was resting (unknown id).
+
+Cancelling never throws for an absent order and never disturbs any other order,
+so it composes cleanly with subsequent matching: a cancelled order simply no
+longer provides liquidity.
+
+### Scope
+
+Cancellation covers resting limit orders. Amend/replace is still out of scope
+(modelled as cancel-and-resubmit for now).

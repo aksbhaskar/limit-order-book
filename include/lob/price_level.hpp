@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <deque>
+#include <stdexcept>
 
 #include "lob/order.hpp"
 #include "lob/price.hpp"
@@ -14,8 +15,8 @@ namespace lob {
 // priority. The order book guarantees that orders are appended in
 // non-decreasing sequence order, so back-insertion preserves time priority.
 //
-// This type stores and reports orders, and supports the single reduction the
-// matching engine needs: filling the front (oldest) order.
+// This type stores and reports orders, fills the front (oldest) order for the
+// matching engine, and removes an arbitrary order by id for cancellation.
 class PriceLevel {
 public:
     explicit PriceLevel(Price price) noexcept : price_(price) {}
@@ -60,6 +61,23 @@ public:
             return {true, id};
         }
         return {false, OrderId{}};
+    }
+
+    // Removes the order with `id` (a cancellation), subtracting its remaining
+    // quantity from the level's aggregate. Returns that removed remaining
+    // quantity on success. The relative FIFO order — and therefore the time
+    // priority and sequence numbers — of every other order is preserved.
+    // Throws std::logic_error if the id is not present at this level.
+    Quantity remove(OrderId id) {
+        for (auto it = orders_.begin(); it != orders_.end(); ++it) {
+            if (it->id() == id) {
+                const Quantity removed = it->remaining_quantity();
+                total_quantity_ = total_quantity_ - removed;
+                orders_.erase(it);
+                return removed;
+            }
+        }
+        throw std::logic_error("PriceLevel::remove: order id not at this level");
     }
 
 private:

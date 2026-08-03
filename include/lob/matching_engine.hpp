@@ -29,13 +29,16 @@ struct SubmitResult {
 // price. Any quantity that cannot be matched rests in the book as a new limit
 // order. The engine holds no other state, so behaviour is fully deterministic.
 //
-// Only limit-order matching is implemented: no market orders, cancellations,
-// amendments, or higher-level strategies.
+// Only limit-order matching is implemented: no market orders, amendments, or
+// higher-level strategies. Resting orders may be cancelled by id.
 class MatchingEngine {
 public:
     // Submits an order: matches it against the book and rests any remainder.
     // Returns the resulting trades and fill/remaining accounting.
     SubmitResult submit(Order order);
+
+    // Cancels a resting order by id. See OrderBook::cancel for the semantics.
+    CancelResult cancel(OrderId id) { return book_.cancel(id); }
 
     // Read-only access to the underlying book (for inspection and testing).
     const OrderBook& book() const noexcept { return book_; }

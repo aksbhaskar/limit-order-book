@@ -27,7 +27,7 @@ void OrderBook::add_order(const Order& order) {
     if (order.type() != OrderType::Limit) {
         throw std::invalid_argument("order book only accepts limit orders");
     }
-    if (ids_.contains(order.id())) {
+    if (live_.contains(order.id())) {
         throw std::invalid_argument("duplicate order id in book");
     }
 
@@ -38,7 +38,35 @@ void OrderBook::add_order(const Order& order) {
         auto [it, inserted] = asks_.try_emplace(order.price(), order.price());
         it->second.add(order);
     }
-    ids_.insert(order.id());
+    live_.emplace(order.id(), Locator{order.side(), order.price()});
+}
+
+CancelResult OrderBook::cancel(OrderId id) {
+    const auto it = live_.find(id);
+    if (it == live_.end()) {
+        const CancelStatus status =
+            filled_.contains(id) ? CancelStatus::AlreadyFilled : CancelStatus::NotFound;
+        return CancelResult{id, status, Quantity{}};
+    }
+
+    const Locator loc = it->second;
+    if (loc.side == Side::Buy) {
+        auto level_it = bids_.find(loc.price);
+        const Quantity removed = level_it->second.remove(id);
+        if (level_it->second.empty()) {
+            bids_.erase(level_it);
+        }
+        live_.erase(it);
+        return CancelResult{id, CancelStatus::Cancelled, removed};
+    }
+
+    auto level_it = asks_.find(loc.price);
+    const Quantity removed = level_it->second.remove(id);
+    if (level_it->second.empty()) {
+        asks_.erase(level_it);
+    }
+    live_.erase(it);
+    return CancelResult{id, CancelStatus::Cancelled, removed};
 }
 
 const PriceLevel* OrderBook::best_bid() const noexcept {
@@ -72,7 +100,8 @@ void OrderBook::reduce_best(Side side, Quantity qty) {
         auto it = bids_.begin();
         const auto result = it->second.reduce_front(qty);
         if (result.order_completed) {
-            ids_.erase(result.completed_id);
+            live_.erase(result.completed_id);
+            filled_.insert(result.completed_id);
         }
         if (it->second.empty()) {
             bids_.erase(it);
@@ -81,7 +110,8 @@ void OrderBook::reduce_best(Side side, Quantity qty) {
         auto it = asks_.begin();
         const auto result = it->second.reduce_front(qty);
         if (result.order_completed) {
-            ids_.erase(result.completed_id);
+            live_.erase(result.completed_id);
+            filled_.insert(result.completed_id);
         }
         if (it->second.empty()) {
             asks_.erase(it);
