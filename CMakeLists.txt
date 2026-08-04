@@ -27,6 +27,7 @@ if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
 endif()
 
 option(LOB_BUILD_TESTS "Build unit tests" ${LOB_IS_TOP_LEVEL})
+option(LOB_BUILD_BENCHMARKS "Build benchmarks" ${LOB_IS_TOP_LEVEL})
 
 # Shared warning flags for our own targets.
 add_library(lob_warnings INTERFACE)
@@ -45,4 +46,8 @@ add_subdirectory(src)
 if(LOB_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+endif()
+
+if(LOB_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
