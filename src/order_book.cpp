@@ -90,6 +90,22 @@ std::size_t OrderBook::level_count(Side side) const noexcept {
     return side == Side::Buy ? bids_.size() : asks_.size();
 }
 
+std::vector<const PriceLevel*> OrderBook::levels(Side side) const {
+    std::vector<const PriceLevel*> out;
+    if (side == Side::Buy) {
+        out.reserve(bids_.size());
+        for (const auto& [price, level] : bids_) {
+            out.push_back(&level);
+        }
+    } else {
+        out.reserve(asks_.size());
+        for (const auto& [price, level] : asks_) {
+            out.push_back(&level);
+        }
+    }
+    return out;
+}
+
 std::vector<LevelView> OrderBook::depth(Side side, std::size_t max_levels) const {
     return side == Side::Buy ? collect_depth(bids_, max_levels)
                              : collect_depth(asks_, max_levels);

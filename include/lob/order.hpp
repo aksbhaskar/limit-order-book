@@ -54,6 +54,10 @@ public:
     // True once nothing is left to fill.
     constexpr bool is_filled() const noexcept { return remaining_.is_zero(); }
 
+    // Value equality over all fields (including remaining quantity). Useful for
+    // recording/replay comparisons and tests.
+    friend bool operator==(const Order&, const Order&) = default;
+
     // Applies a (partial or full) fill, reducing the remaining quantity by
     // `quantity`. Throws std::invalid_argument if `quantity` is zero or exceeds
     // the remaining quantity. The original quantity() is unchanged, preserving

@@ -10,6 +10,9 @@ add_library(lob
     order.cpp
     order_book.cpp
     matching_engine.cpp
+    event_log.cpp
+    recording_engine.cpp
+    book_snapshot.cpp
 )
 target_link_libraries(lob PUBLIC lob_headers)
 target_link_libraries(lob PRIVATE lob_warnings)

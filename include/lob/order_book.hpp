@@ -83,6 +83,11 @@ public:
     // Number of distinct price levels on a side.
     std::size_t level_count(Side side) const noexcept;
 
+    // All price levels on a side, in priority order (best first). Pointers are
+    // valid until the book is next modified. Useful for full-state inspection
+    // and snapshotting.
+    std::vector<const PriceLevel*> levels(Side side) const;
+
     // Depth snapshot: up to max_levels levels from the best price outward, in
     // priority order (best first).
     std::vector<LevelView> depth(Side side, std::size_t max_levels) const;

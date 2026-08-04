@@ -27,11 +27,12 @@ is only marked complete once the corresponding code and tests land.
 | 4         | Matching engine producing trades / executions           | Done        |
 | 5         | Order cancellation                                      | Done        |
 | 6         | Market orders                                           | Done        |
-| 7         | Order amend / replace                                   | Planned     |
-| 8         | Further order types (IOC, FOK, ...)                     | Planned     |
-| 9         | Benchmarks: throughput and latency characterisation     | Planned     |
+| 7         | Market-data event recording and deterministic replay    | Done        |
+| 8         | Benchmarks: throughput and latency characterisation     | Planned     |
+| 9         | Order amend / replace                                   | Planned     |
+| 10        | Further order types (IOC, FOK, ...)                     | Planned     |
 
-Only milestones 1–6 are implemented at present. Everything from milestone 7
+Only milestones 1–7 are implemented at present. Everything from milestone 8
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -211,3 +212,71 @@ Everything else is unchanged and shared:
 
 Market and limit orders are supported. Immediate-or-cancel and fill-or-kill
 variants, which build on the same machinery, remain future work.
+
+## Market-data events and replay
+
+A recording/replay layer sits *around* the matching engine, not inside it, so
+the engine's behaviour and API are unchanged and the layer could be driven by an
+external historical feed instead.
+
+### Event model
+
+A `MarketEvent` is a monotonic `index` (the deterministic ordering key) plus a
+strongly typed payload — a `std::variant` of exactly three alternatives:
+
+- **SubmissionEvent** — an order arrived, captured as the full `Order`.
+- **CancellationEvent** — a resting order was cancelled, by id.
+- **ExecutionEvent** — two orders traded, captured as a `Trade`.
+
+Submissions and cancellations are *commands* (they drive state); executions are
+*derived output*. Keeping all three in one stream gives a faithful market-data
+record, while the command/derived distinction is what makes replay possible.
+
+### Recording
+
+`RecordingEngine` wraps a `MatchingEngine`. It forwards `submit`/`cancel`
+unchanged and appends events as they occur:
+
+- `submit(order)` records the submission, then one execution per resulting
+  trade, in trade order.
+- `cancel(id)` records a cancellation only when it actually removed a resting
+  order, so the log reflects real state changes rather than rejected requests.
+
+Every appended event takes the next value of a monotonic counter, giving the log
+a total, gap-free order.
+
+### Serialization
+
+`EventLog` serializes to a simple, self-contained, line-based text format (a
+`LOBLOG v1` header then one event per line). Prices are written as integer
+**ticks**, so the fixed-point representation round-trips exactly — no
+floating-point is ever involved. Parsing re-validates each order through the
+`Order` constructor and raises a uniform parse error on a bad header, unknown
+tag, missing/non-numeric field, or invariant violation. No database or network
+is used.
+
+### Replay and determinism
+
+`replay(log)` feeds the log's **command** events (submissions and cancellations)
+through a fresh `RecordingEngine`; execution events are skipped because the
+engine regenerates them. Because matching is deterministic, replay reconstructs
+both the same book and the same executions:
+
+- The replayed recorder's own log **equals** the original log (same events, same
+  indices) — a strong determinism check.
+- The reconstructed book **equals** the original book.
+
+### Comparing book state
+
+`BookSnapshot::of(book)` captures full state deterministically: every level in
+price-priority order and, within each level, every resting order in FIFO order
+with its id, remaining quantity, and sequence number. Two snapshots compare
+equal exactly when the books agree on price priority, time priority, and resting
+quantity — the definition of "the book after replay matches the book before".
+
+### Scope
+
+Recording, serialization, and replay cover submissions, cancellations, and
+executions. There is no networking, no persistence beyond the text format, and
+no external feed adapter yet — but the layer is deliberately shaped so one could
+be added without touching the engine.
