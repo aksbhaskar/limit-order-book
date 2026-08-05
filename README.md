@@ -33,9 +33,16 @@ Implemented so far (each feature is listed only once the code and tests exist):
 - **Market-data event recording and deterministic replay**, with a portable
   text log format.
 - **Benchmarks** for the book and engine (see below).
+- **Market-making simulator** with a strategy interface, average-cost P&L
+  accounting, and inventory risk limits.
+- **Backtesting and analytics** with two strategies (fixed-spread and
+  inventory-aware) and machine-readable results (see Strategy research below).
 
 Not yet implemented: order amend/replace and further order types (IOC, FOK, ...).
 See [docs/DESIGN.md](docs/DESIGN.md) for the full roadmap.
+
+All strategy/backtest numbers are from a toy simulator and are **not** claims
+about real-market performance.
 
 ## Layout
 
@@ -44,6 +51,7 @@ include/lob/    Public headers (the library interface)
 src/            Library sources and the executable
 tests/          Unit tests
 benchmarks/     Performance benchmarks (nanobench)
+examples/       Runnable examples (e.g. the strategy backtest)
 docs/           Design notes and roadmap
 ```
 
@@ -87,6 +95,42 @@ The `insert+cancel cycle` rows include the insertion cost (you cannot cancel an
 order you did not insert); subtract the matching `limit insertion` baseline to
 isolate cancellation. `best bid/ask lookup` is a pure `const` read and is orders
 of magnitude cheaper than the mutating operations.
+
+## Strategy research
+
+The project includes a deterministic market-making **simulator** and a
+**backtester** that runs strategies over a toy synthetic market and reports
+performance analytics.
+
+> **These are simulated results, not real-market performance.** The market is a
+> toy (random-walk mid, coin-flip market-order flow); it is not a model of any
+> real venue and says nothing about how a strategy would perform live. The
+> numbers exist only to compare the two strategies against each other under
+> identical, reproducible conditions.
+
+Two strategies — a fixed-spread maker and an inventory-aware maker (which shifts
+and widens its quotes against inventory) — are run on the **same** deterministic
+market. Reproduce with:
+
+```bash
+cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
+./build/examples/lob_backtest
+```
+
+Config: `seed=42`, `steps=5000`, starting cash `100000.0000`, transaction cost
+`0.0002/unit`, spread `0.0100`, max inventory `50`, quote size `5`. Actual output
+from the run:
+
+| Strategy | Total P&L | Return | Sharpe (per-step) | Max DD | Trades | Fill rate | Max abs inv |
+|----------|----------:|-------:|------------------:|-------:|-------:|----------:|------------:|
+| fixed-spread    | 64.44 | 0.064% | 0.432 | ~0.0% | 3919 | 0.401 | 50 |
+| inventory-aware | 89.72 | 0.090% | 0.504 | ~0.0% | 3919 | 0.401 | 50 |
+
+In this toy market the aggressor flow is price-insensitive (pure market orders),
+so quote *prices* affect P&L per fill but not which fills occur — both strategies
+therefore trade the same inventory path and differ only in P&L. See
+[docs/DESIGN.md](docs/DESIGN.md) for the accounting conventions, metric
+definitions, and this caveat in full.
 
 ## Roadmap
 

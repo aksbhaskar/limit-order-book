@@ -30,11 +30,11 @@ is only marked complete once the corresponding code and tests land.
 | 7         | Market-data event recording and deterministic replay    | Done        |
 | 8         | Benchmarks: throughput and latency characterisation     | Done        |
 | 9         | Market-making simulator                                 | Done        |
-| 10        | Strategy backtesting and performance analytics          | Planned     |
+| 10        | Strategy backtesting and performance analytics          | Done        |
 | 11        | Order amend / replace                                   | Planned     |
 | 12        | Further order types (IOC, FOK, ...)                     | Planned     |
 
-Only milestones 1–9 are implemented at present. Everything from milestone 10
+Only milestones 1–10 are implemented at present. Everything from milestone 11
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -346,3 +346,59 @@ accounting (see the comments in `pnl_account.hpp`):
 Per step the simulator records the mid, both quote prices/sizes, inventory, cash,
 realized/unrealized/total P&L, and fills; the summary adds final inventory and
 P&L, quotes placed, fills, filled quantity, and the fill rate (fills per quote).
+
+## Backtesting and analytics
+
+The `Backtester` runs a `Strategy` over the simulated market and turns the
+recorded time series into performance analytics. It wraps `MarketMakerSimulator`,
+so every strategy shares the same engine, accounting, and market generation.
+
+> **Simulated, not real.** Every figure below is produced by the toy simulator.
+> None of it represents real-exchange performance; it exists only to compare
+> strategies against each other under identical, reproducible conditions.
+
+### Metrics
+
+From the equity curve (`starting_cash + total P&L` per step) and the position
+series, `BacktestMetrics` reports: total / realized / unrealized P&L, return on
+starting cash, maximum drawdown (largest peak-to-trough equity drop as a fraction
+of the peak), volatility (std dev of per-step returns), Sharpe (mean/std of
+per-step returns, risk-free 0), trade count, fill rate, average inventory, and
+maximum absolute inventory. Returns are **per simulation step** normalised by the
+starting cash — there is no wall-clock calendar, so Sharpe is intentionally *not*
+annualised.
+
+### Transaction costs
+
+A per-filled-unit fee (`SimConfig::transaction_cost_ticks`) is charged into the
+`PnLAccount` as a realized cost on every fill, so cost sensitivity can be studied
+by varying one parameter.
+
+### Machine-readable output
+
+`BacktestMetrics::to_json()` emits a compact JSON object, and `results_to_json`
+a JSON array, so runs can be captured and post-processed by later research
+tooling without any external dependency.
+
+### Strategies and fair comparison
+
+Two strategies ship, both implementing the same `Strategy` interface and running
+through the same infrastructure:
+
+1. `FixedSpreadMarketMaker` — quotes a constant spread around the mid.
+2. `InventoryAwareMarketMaker` — shifts its quotes against inventory (a
+   reservation price) and widens them as |inventory| grows.
+
+Because the market's random stream depends only on the config, running both with
+the same `SimConfig` executes them on **identical** conditions. `examples/backtest_example.cpp`
+does exactly this and prints a comparison table plus JSON.
+
+### A caveat about this toy market
+
+The synthetic aggressors are pure market orders, which cross regardless of price.
+So in this model a strategy's quote *prices* change the P&L captured per fill but
+**not** which fills happen — fill timing and size depend only on quote size and
+the seeded aggressor flow. As a result the two strategies follow the same
+inventory path here and differ only in P&L. A price-sensitive taker model (so
+that wider/skewed quotes actually miss fills) is a natural next step but is out
+of scope for this milestone.

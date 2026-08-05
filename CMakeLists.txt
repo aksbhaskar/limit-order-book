@@ -28,6 +28,7 @@ endif()
 
 option(LOB_BUILD_TESTS "Build unit tests" ${LOB_IS_TOP_LEVEL})
 option(LOB_BUILD_BENCHMARKS "Build benchmarks" ${LOB_IS_TOP_LEVEL})
+option(LOB_BUILD_EXAMPLES "Build example executables" ${LOB_IS_TOP_LEVEL})
 
 # Shared warning flags for our own targets.
 add_library(lob_warnings INTERFACE)
@@ -50,4 +51,8 @@ endif()
 
 if(LOB_BUILD_BENCHMARKS)
     add_subdirectory(benchmarks)
+endif()
+
+if(LOB_BUILD_EXAMPLES)
+    add_subdirectory(examples)
 endif()

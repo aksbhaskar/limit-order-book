@@ -33,6 +33,8 @@ add_executable(unit_tests
     test_pnl_account.cpp
     test_market_maker.cpp
     test_market_maker_sim.cpp
+    test_inventory_market_maker.cpp
+    test_backtest.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 

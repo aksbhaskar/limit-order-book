@@ -16,6 +16,8 @@ add_library(lob
     pnl_account.cpp
     market_maker.cpp
     market_maker_simulator.cpp
+    inventory_market_maker.cpp
+    backtest.cpp
 )
 target_link_libraries(lob PUBLIC lob_headers)
 target_link_libraries(lob PRIVATE lob_warnings)
