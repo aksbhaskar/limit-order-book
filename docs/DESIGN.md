@@ -28,11 +28,13 @@ is only marked complete once the corresponding code and tests land.
 | 5         | Order cancellation                                      | Done        |
 | 6         | Market orders                                           | Done        |
 | 7         | Market-data event recording and deterministic replay    | Done        |
-| 8         | Benchmarks: throughput and latency characterisation     | Planned     |
-| 9         | Order amend / replace                                   | Planned     |
-| 10        | Further order types (IOC, FOK, ...)                     | Planned     |
+| 8         | Benchmarks: throughput and latency characterisation     | Done        |
+| 9         | Market-making simulator                                 | Done        |
+| 10        | Strategy backtesting and performance analytics          | Planned     |
+| 11        | Order amend / replace                                   | Planned     |
+| 12        | Further order types (IOC, FOK, ...)                     | Planned     |
 
-Only milestones 1–7 are implemented at present. Everything from milestone 8
+Only milestones 1–9 are implemented at present. Everything from milestone 10
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -280,3 +282,67 @@ Recording, serialization, and replay cover submissions, cancellations, and
 executions. There is no networking, no persistence beyond the text format, and
 no external feed adapter yet — but the layer is deliberately shaped so one could
 be added without touching the engine.
+
+## Market-making simulator
+
+A research-oriented layer runs a market-making **strategy** against a
+deterministic synthetic market, using only the public engine APIs.
+
+> **Simulation, not reality.** The synthetic market is a toy: a random-walk mid
+> and coin-flip aggressor flow. It exists to exercise the strategy and accounting
+> code deterministically. It is **not** a model of any real venue and its results
+> say nothing about real-market performance.
+
+### Strategy interface
+
+`Strategy` is a tiny interface: given a `MarketState` (reference mid, current
+best bid/ask, the strategy's own inventory, and the step index) it returns a
+`QuoteDecision` — an optional bid and an optional ask, each with a price and
+size. The strategy only *decides*; it never touches the book. `FixedSpreadMarketMaker`
+is the first implementation: it quotes `mid ± spread/2`.
+
+### Risk limits
+
+A symmetric inventory cap `±max_inventory` is enforced *before* orders reach the
+book: the shared `inventory_room` helper clamps each side's size to the room
+remaining (`max_inventory − inventory` for the bid, `max_inventory + inventory`
+for the ask) and drops a side with no room. Because a single aggressor hits only
+one side per step, inventory provably stays within `[−max_inventory, +max_inventory]`.
+
+### Simulation loop
+
+Each step, the `MarketMakerSimulator`:
+
+1. random-walks the reference mid (seeded);
+2. cancels the previous quotes via `MatchingEngine::cancel`;
+3. asks the strategy to quote and submits the quotes via `MatchingEngine::submit`;
+4. with the configured probability, submits a synthetic market order on a random
+   side that crosses one of the quotes;
+5. books any fills against the strategy's quotes into the `PnLAccount` and records
+   the portfolio state.
+
+The random stream depends only on the config, never on the strategy's choices, so
+two strategies can be run on **identical** market conditions for a fair comparison.
+Everything is integer/seeded, so a config yields exactly one run.
+
+### Accounting conventions
+
+`PnLAccount` keeps all money in integer **ticks** and uses average-cost
+accounting (see the comments in `pnl_account.hpp`):
+
+- A buy fill raises the position and lowers cash by `price × quantity`; a sell
+  fill is the reverse.
+- **Realized** P&L is booked via average cost whenever a fill reduces or closes
+  the position; flipping through zero realizes the old side and reopens the
+  remainder at the fill price.
+- **Total** P&L marked at price *m* is the exact cash figure
+  `cash + position × m − starting_cash`, and **unrealized** is defined as
+  `total − realized`, so `realized + unrealized == total` holds exactly despite
+  integer rounding in the average cost.
+- A transaction fee is a realized cost (it lowers both cash and realized).
+
+### Tracked series
+
+Per step the simulator records the mid, both quote prices/sizes, inventory, cash,
+realized/unrealized/total P&L, and fills; the summary adds final inventory and
+P&L, quotes placed, fills, filled quantity, and the fill rate (fills per quote).

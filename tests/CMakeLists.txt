@@ -30,6 +30,9 @@ add_executable(unit_tests
     test_market_event.cpp
     test_event_log.cpp
     test_replay.cpp
+    test_pnl_account.cpp
+    test_market_maker.cpp
+    test_market_maker_sim.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 

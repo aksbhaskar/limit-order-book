@@ -13,6 +13,9 @@ add_library(lob
     event_log.cpp
     recording_engine.cpp
     book_snapshot.cpp
+    pnl_account.cpp
+    market_maker.cpp
+    market_maker_simulator.cpp
 )
 target_link_libraries(lob PUBLIC lob_headers)
 target_link_libraries(lob PRIVATE lob_warnings)
