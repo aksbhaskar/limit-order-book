@@ -31,10 +31,12 @@ is only marked complete once the corresponding code and tests land.
 | 8         | Benchmarks: throughput and latency characterisation     | Done        |
 | 9         | Market-making simulator                                 | Done        |
 | 10        | Strategy backtesting and performance analytics          | Done        |
-| 11        | Order amend / replace                                   | Planned     |
-| 12        | Further order types (IOC, FOK, ...)                     | Planned     |
+| 11        | Price-sensitive synthetic market dynamics               | Done        |
+| 12        | Market-making parameter research study                  | Done        |
+| 13        | Order amend / replace                                   | Planned     |
+| 14        | Further order types (IOC, FOK, ...)                     | Planned     |
 
-Only milestones 1–10 are implemented at present. Everything from milestone 11
+Only milestones 1–12 are implemented at present. Everything from milestone 13
 onward is a plan, not a promise of existing functionality.
 
 ## Order book architecture
@@ -437,3 +439,23 @@ same fills at different prices. In practice the inventory-aware maker holds a
 materially smaller inventory than the fixed-spread maker on the same market, at a
 comparable P&L — but every such statement is a property of *this simulation only*
 and is not evidence about real markets.
+
+## Parameter research study
+
+The `parameter_study` layer turns the backtester into a reproducible experiment.
+
+- **Grid.** `generate_grid` takes axes (spreads, order quantities, inventory
+  limits, skew strengths, transaction costs) and produces their Cartesian product
+  in a fixed order.
+- **Distributions.** `run_study` runs every `(parameter point, strategy)` over a
+  list of seeds, collecting per-seed metrics into `Aggregate`s (mean, median,
+  sample standard deviation, and a 95% confidence interval of the mean). Both
+  strategies use the same seed and market per run, so the comparison is fair.
+- **Output.** `StudyResult::to_json` and `to_csv` emit machine-readable results
+  (one record per `(point, strategy)`), dependency-free, for external plotting or
+  analysis.
+- **Executable.** `examples/lob_param_study` runs the full experiment, writes
+  `study_results.{json,csv}`, and prints a comparison summary. It hard-codes no
+  results; every number is computed at run time. See [RESEARCH.md](RESEARCH.md)
+  for the study writeup, and note again that all of it is simulated, not evidence
+  about real markets.

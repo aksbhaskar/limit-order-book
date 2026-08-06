@@ -1,2 +1,5 @@
 add_executable(lob_backtest backtest_example.cpp)
 target_link_libraries(lob_backtest PRIVATE lob lob_warnings)
+
+add_executable(lob_param_study parameter_study_example.cpp)
+target_link_libraries(lob_param_study PRIVATE lob lob_warnings)
