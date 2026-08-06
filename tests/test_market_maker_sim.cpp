@@ -14,8 +14,9 @@ SimConfig base_config() {
     c.steps = 3000;
     c.seed = 7;
     c.initial_mid = Price::from_units(100);
-    c.mid_tick_step = 10;
-    c.trade_permille = 800;
+    c.mid_volatility_ticks = 10;
+    c.order_arrival_permille = 800;
+    c.liquidity_reach_ticks = 80;
     c.max_aggressor_qty = 6;
     c.starting_cash_ticks = 1'000'000;
     return c;
@@ -100,7 +101,7 @@ TEST_CASE("Fill rate is a fraction in [0, 1]") {
 
 TEST_CASE("With no aggressor flow the strategy stays flat and flat P&L") {
     SimConfig cfg = base_config();
-    cfg.trade_permille = 0;   // no counterparties ever arrive
+    cfg.order_arrival_permille = 0;   // no counterparties ever arrive
     FixedSpreadMarketMaker mm(mm_config());
     const SimResult r = MarketMakerSimulator(cfg).run(mm);
 

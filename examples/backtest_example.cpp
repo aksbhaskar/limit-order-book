@@ -42,8 +42,9 @@ int main() {
     market.steps = 5000;
     market.seed = 42;
     market.initial_mid = Price::from_units(100);
-    market.mid_tick_step = 10;
-    market.trade_permille = 800;
+    market.mid_volatility_ticks = 10;
+    market.order_arrival_permille = 800;
+    market.liquidity_reach_ticks = 80;
     market.max_aggressor_qty = 6;
     market.starting_cash_ticks = 100'000 * Price::kTicksPerUnit;   // 100,000.0000
     market.transaction_cost_ticks = 2;                             // 0.0002 per unit

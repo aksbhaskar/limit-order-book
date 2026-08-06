@@ -35,6 +35,7 @@ add_executable(unit_tests
     test_market_maker_sim.cpp
     test_inventory_market_maker.cpp
     test_backtest.cpp
+    test_synthetic_market.cpp
 )
 target_link_libraries(unit_tests PRIVATE lob lob_warnings doctest::doctest)
 

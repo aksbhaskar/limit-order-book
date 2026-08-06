@@ -1,5 +1,6 @@
 #include "lob/market_maker_simulator.hpp"
 
+#include <cmath>
 #include <cstdint>
 #include <optional>
 #include <random>
@@ -12,6 +13,56 @@
 #include "lob/types.hpp"
 
 namespace lob {
+
+namespace {
+
+// Uniform mid increment in [-vol, +vol] ticks (consumes exactly one draw when
+// vol > 0, zero draws otherwise, keeping the stream strategy-independent).
+std::int64_t draw_mid_increment(std::mt19937_64& rng, std::int64_t vol) {
+    if (vol <= 0) {
+        return 0;
+    }
+    return static_cast<std::int64_t>(rng() % (2 * static_cast<std::uint64_t>(vol) + 1)) - vol;
+}
+
+// Exponential reach via inverse-CDF: reach = -mean * ln(u), u in (0, 1].
+// Then P(reach >= d) = exp(-d / mean): a quote at distance d fills with that
+// probability. Consumes exactly one draw.
+std::int64_t draw_reach(std::mt19937_64& rng, std::int64_t mean_ticks) {
+    if (mean_ticks <= 0) {
+        return 0;
+    }
+    const double u = (static_cast<double>(rng() % 1'000'000) + 1.0) / 1'000'001.0;
+    const double reach = -static_cast<double>(mean_ticks) * std::log(u);
+    return static_cast<std::int64_t>(std::llround(reach));
+}
+
+}  // namespace
+
+SimConfig regime_config(MarketRegime regime) {
+    SimConfig c;
+    switch (regime) {
+        case MarketRegime::Calm:
+            c.mid_volatility_ticks = 4;
+            c.order_arrival_permille = 500;
+            c.liquidity_reach_ticks = 50;
+            c.max_aggressor_qty = 4;
+            break;
+        case MarketRegime::Volatile:
+            c.mid_volatility_ticks = 30;
+            c.order_arrival_permille = 500;
+            c.liquidity_reach_ticks = 50;
+            c.max_aggressor_qty = 4;
+            break;
+        case MarketRegime::HighVolume:
+            c.mid_volatility_ticks = 8;
+            c.order_arrival_permille = 950;
+            c.liquidity_reach_ticks = 90;
+            c.max_aggressor_qty = 8;
+            break;
+    }
+    return c;
+}
 
 SimResult MarketMakerSimulator::run(Strategy& strategy) const {
     SimResult result;
@@ -28,10 +79,10 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
     std::uint64_t next_seq = 1;
 
     for (std::uint64_t step = 0; step < config_.steps; ++step) {
-        // 1. Reference mid takes a seeded random-walk step (kept positive).
-        mid += ((rng() & 1u) != 0 ? 1 : -1) * config_.mid_tick_step;
-        if (mid < config_.mid_tick_step) {
-            mid = config_.mid_tick_step;
+        // 1. Reference mid takes a volatility-scaled random-walk step (kept > 0).
+        mid += draw_mid_increment(rng, config_.mid_volatility_ticks);
+        if (mid < 1) {
+            mid = 1;
         }
         const Price mid_price = Price::from_ticks(mid);
 
@@ -83,16 +134,31 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
             record.ask_quantity = decision.ask_quantity.value();
         }
 
-        // 5. A synthetic aggressor may arrive and cross one of the quotes.
+        // 5. A price-sensitive aggressor may arrive. It is a limit order priced a
+        //    random "reach" away from the mid, so it only crosses a quote that
+        //    lies within that reach; any unfilled remainder is cancelled (IOC).
         std::uint64_t step_fills = 0;
         std::uint64_t step_qty = 0;
-        if ((rng() % 1000) < config_.trade_permille) {
-            const bool aggressor_buys = (rng() & 1u) != 0;  // buy lifts the MM ask
+        if ((rng() % 1000) < config_.order_arrival_permille) {
+            const bool aggressor_buys = (rng() & 1u) != 0;   // buy lifts the MM ask
             const std::uint64_t aq = 1 + rng() % config_.max_aggressor_qty;
+            const std::int64_t reach = draw_reach(rng, config_.liquidity_reach_ticks);
+
+            if (aggressor_buys) {
+                ++result.aggressor_buys;
+            } else {
+                ++result.aggressor_sells;
+            }
+
+            std::int64_t limit_ticks = aggressor_buys ? mid + reach : mid - reach;
+            if (limit_ticks < 1) {
+                limit_ticks = 1;   // never an impossible (non-positive) price
+            }
             const Side aggr_side = aggressor_buys ? Side::Buy : Side::Sell;
             const OrderId id{next_id++};
-            const SubmitResult sr = engine.submit(Order(
-                id, aggr_side, OrderType::Market, Price{}, Quantity{aq}, Sequence{next_seq++}));
+            const SubmitResult sr = engine.submit(Order(id, aggr_side, OrderType::Limit,
+                                                        Price::from_ticks(limit_ticks),
+                                                        Quantity{aq}, Sequence{next_seq++}));
 
             for (const Trade& trade : sr.trades) {
                 Side mm_side;
@@ -112,6 +178,12 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
                 step_qty += trade.quantity.value();
                 ++result.fills;
                 result.filled_quantity += trade.quantity.value();
+            }
+
+            // Immediate-or-cancel: drop any unfilled aggressor remainder so it
+            // never rests as phantom liquidity.
+            if (sr.resting) {
+                engine.cancel(id);
             }
         }
 

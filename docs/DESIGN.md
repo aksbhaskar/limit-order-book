@@ -288,10 +288,11 @@ be added without touching the engine.
 A research-oriented layer runs a market-making **strategy** against a
 deterministic synthetic market, using only the public engine APIs.
 
-> **Simulation, not reality.** The synthetic market is a toy: a random-walk mid
-> and coin-flip aggressor flow. It exists to exercise the strategy and accounting
-> code deterministically. It is **not** a model of any real venue and its results
-> say nothing about real-market performance.
+> **Simulation, not reality.** The synthetic market is a deliberately simple
+> model — a volatility-scaled random-walk mid and price-sensitive aggressor flow
+> (detailed below). It exists to exercise the strategy and accounting code
+> deterministically. It is **not** a model of any real venue and its results say
+> nothing about real-market performance.
 
 ### Strategy interface
 
@@ -313,17 +314,51 @@ one side per step, inventory provably stays within `[−max_inventory, +max_inve
 
 Each step, the `MarketMakerSimulator`:
 
-1. random-walks the reference mid (seeded);
+1. moves the reference mid by a volatility-scaled random-walk step (seeded);
 2. cancels the previous quotes via `MatchingEngine::cancel`;
 3. asks the strategy to quote and submits the quotes via `MatchingEngine::submit`;
-4. with the configured probability, submits a synthetic market order on a random
-   side that crosses one of the quotes;
+4. with the configured probability, submits a **price-sensitive** aggressor (see
+   the next section) that fills a quote only if it lies within the aggressor's
+   reach;
 5. books any fills against the strategy's quotes into the `PnLAccount` and records
    the portfolio state.
 
 The random stream depends only on the config, never on the strategy's choices, so
 two strategies can be run on **identical** market conditions for a fair comparison.
 Everything is integer/seeded, so a config yields exactly one run.
+
+### Synthetic market model
+
+The market is deliberately simple and transparent — it is a *model for exercising
+strategies*, not an attempt to reproduce a real venue. Its three moving parts:
+
+- **Reference mid.** Each step the mid moves by an integer drawn uniformly from
+  `[−mid_volatility_ticks, +mid_volatility_ticks]`. Higher volatility widens the
+  range the mid explores; it is clamped to stay positive.
+- **Order arrival.** With probability `order_arrival_permille / 1000` a single
+  aggressor arrives, on a buy or sell side chosen by a fair coin. So both buy and
+  sell aggressive flow occur.
+- **Price-sensitive reach.** The aggressor is a **limit** order priced a random
+  *reach* away from the mid, where the reach is exponentially distributed with
+  mean `liquidity_reach_ticks` (drawn by inverse-CDF, `reach = −mean · ln u`). A
+  buy aggressor lifts the ask only if the quoted ask is within `mid + reach`; a
+  sell aggressor hits the bid only if the quoted bid is within `mid − reach`.
+  Hence a quote at distance `d` from the mid is taken with probability
+  `exp(−d / mean)`: **tighter quotes fill more often, wider quotes less often.**
+  The aggressor is immediate-or-cancel — any unfilled remainder is cancelled, so
+  it never rests as phantom liquidity, and it is never priced below one tick.
+
+`regime_config` provides ready-made parameter sets for `Calm` (low volatility),
+`Volatile` (high volatility), and `HighVolume` (heavy, deep-reaching flow).
+
+**Assumptions and limitations.** The mid walk is a bounded, memoryless uniform
+process, not a calibrated price model. Aggressor arrivals are independent across
+steps (no clustering or autocorrelation), the reach is a plain exponential, and
+only the strategy's own quotes provide liquidity. There is no latency, no queue
+position beyond the engine's own FIFO, no fees other than the flat per-unit cost,
+and no adverse-selection model beyond what the reach distribution implies. The
+figures it produces are meaningful only *relative to each other*, never as
+estimates of real-market performance.
 
 ### Accounting conventions
 
@@ -393,12 +428,12 @@ Because the market's random stream depends only on the config, running both with
 the same `SimConfig` executes them on **identical** conditions. `examples/backtest_example.cpp`
 does exactly this and prints a comparison table plus JSON.
 
-### A caveat about this toy market
+### Effect of the price-sensitive market
 
-The synthetic aggressors are pure market orders, which cross regardless of price.
-So in this model a strategy's quote *prices* change the P&L captured per fill but
-**not** which fills happen — fill timing and size depend only on quote size and
-the seeded aggressor flow. As a result the two strategies follow the same
-inventory path here and differ only in P&L. A price-sensitive taker model (so
-that wider/skewed quotes actually miss fills) is a natural next step but is out
-of scope for this milestone.
+Because aggressor fills now depend on quote distance (see the synthetic market
+model above), quote *placement* genuinely matters: a strategy that skews and
+widens its quotes against inventory trades a different set of fills, not just the
+same fills at different prices. In practice the inventory-aware maker holds a
+materially smaller inventory than the fixed-spread maker on the same market, at a
+comparable P&L — but every such statement is a property of *this simulation only*
+and is not evidence about real markets.

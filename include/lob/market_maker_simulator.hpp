@@ -8,18 +8,40 @@
 
 namespace lob {
 
+// Broad market conditions with sensible default parameters (see regime_config).
+enum class MarketRegime {
+    Calm,         // low volatility, moderate flow
+    Volatile,     // high volatility, moderate flow
+    HighVolume,   // heavy, deep-reaching flow
+};
+
 // Configuration of the synthetic market the simulator drives. All randomness is
 // seeded, so a given config produces exactly one deterministic run.
+//
+// The market is intentionally simple and transparent (see docs/DESIGN.md):
+//   * The reference mid follows a random walk whose per-step increment is uniform
+//     on [-mid_volatility_ticks, +mid_volatility_ticks]; larger volatility means
+//     a wider-ranging mid.
+//   * Each step, with probability order_arrival_permille/1000, one aggressive
+//     order arrives on a random side. Its willingness to "reach" away from the
+//     mid is exponentially distributed with mean liquidity_reach_ticks, so a
+//     quote at distance d from the mid is taken with probability exp(-d / mean).
+//     Tighter quotes therefore fill more often; wider quotes fill less often.
 struct SimConfig {
     std::uint64_t steps = 2000;
     std::uint64_t seed = 1;
     Price initial_mid = Price::from_units(100);
-    std::int64_t mid_tick_step = 10;        // reference-mid random-walk step (ticks)
-    unsigned trade_permille = 800;          // aggressor arrival prob, per mille (0..1000)
-    std::uint64_t max_aggressor_qty = 6;    // aggressor size drawn from [1, this]
-    std::int64_t starting_cash_ticks = 0;   // strategy starting cash
-    std::int64_t transaction_cost_ticks = 0;  // fee per filled unit (ticks)
+    std::int64_t mid_volatility_ticks = 10;      // half-range of the mid increment
+    unsigned order_arrival_permille = 800;       // P(aggressor arrives)/step, per mille
+    std::int64_t liquidity_reach_ticks = 60;     // mean aggressor reach from mid (ticks)
+    std::uint64_t max_aggressor_qty = 6;         // aggressor size drawn from [1, this]
+    std::int64_t starting_cash_ticks = 0;        // strategy starting cash
+    std::int64_t transaction_cost_ticks = 0;     // fee per filled unit (ticks)
 };
+
+// Default market parameters for a named regime (steps / seed / cash are left at
+// their defaults for the caller to set).
+SimConfig regime_config(MarketRegime regime);
 
 // One row of the simulation time series. Money is in ticks (Price scale).
 struct StepRecord {
@@ -55,6 +77,8 @@ struct SimResult {
     std::uint64_t quotes_placed = 0;      // number of quote orders submitted
     std::uint64_t fills = 0;              // number of fill events
     std::uint64_t filled_quantity = 0;
+    std::uint64_t aggressor_buys = 0;     // buy-side aggressors that arrived
+    std::uint64_t aggressor_sells = 0;    // sell-side aggressors that arrived
 
     // Fills per quote order placed.
     double fill_rate() const noexcept {
@@ -68,16 +92,18 @@ struct SimResult {
 
 // Runs a market-making strategy against a deterministic synthetic market.
 //
-// The market is a single order book into which only the strategy's quotes rest.
-// Each step: the reference mid takes a seeded random-walk step; previous quotes
-// are cancelled; the strategy re-quotes from observed state; then, with the
-// configured probability, a synthetic market order arrives on a random side and
-// lifts/hits whichever quote it crosses. Fills against the strategy's quotes are
-// booked through PnLAccount using the existing engine submit/cancel APIs — the
-// simulator never touches book internals directly.
+// Only the strategy's quotes rest in the book. Each step: the reference mid takes
+// a volatility-scaled random-walk step; the previous quotes are cancelled; the
+// strategy re-quotes; then, with the configured probability, one aggressive limit
+// order arrives on a random side. Its exponential "reach" from the mid decides
+// how far it will trade, so it lifts/hits a quote only if that quote lies within
+// reach — making fill probability decrease with quote distance. The aggressor is
+// immediate-or-cancel: any unfilled remainder is cancelled, never rested. All
+// order handling goes through the public MatchingEngine submit/cancel APIs.
 //
-// The random stream depends only on the config, not on the strategy's choices,
-// so two different strategies run on identical market conditions.
+// The random stream depends only on the config, never on the strategy's choices,
+// so two strategies run on identical market conditions (same mid path, arrivals,
+// sides, sizes, and reaches) and differ only in which quotes get filled.
 class MarketMakerSimulator {
 public:
     explicit MarketMakerSimulator(SimConfig config) : config_(config) {}

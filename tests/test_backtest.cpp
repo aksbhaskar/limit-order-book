@@ -15,8 +15,9 @@ SimConfig market(std::int64_t txn_cost = 0) {
     c.steps = 4000;
     c.seed = 123;
     c.initial_mid = Price::from_units(100);
-    c.mid_tick_step = 10;
-    c.trade_permille = 800;
+    c.mid_volatility_ticks = 10;
+    c.order_arrival_permille = 800;
+    c.liquidity_reach_ticks = 80;
     c.max_aggressor_qty = 6;
     c.starting_cash_ticks = 100'000 * Price::kTicksPerUnit;
     c.transaction_cost_ticks = txn_cost;
@@ -60,7 +61,7 @@ TEST_CASE("Backtest metrics are internally consistent") {
 
 TEST_CASE("A flat, tradeless run has zero P&L, volatility, Sharpe and drawdown") {
     SimConfig cfg = market();
-    cfg.trade_permille = 0;   // no trades ever
+    cfg.order_arrival_permille = 0;   // no trades ever
     FixedSpreadMarketMaker mm(fixed_cfg());
     const BacktestMetrics m = Backtester(cfg).run(mm);
 

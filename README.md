@@ -108,9 +108,13 @@ performance analytics.
 > numbers exist only to compare the two strategies against each other under
 > identical, reproducible conditions.
 
-Two strategies — a fixed-spread maker and an inventory-aware maker (which shifts
-and widens its quotes against inventory) — are run on the **same** deterministic
-market. Reproduce with:
+The synthetic market is **price-sensitive**: each aggressor is a limit order
+whose exponential "reach" from the mid decides how far it will trade, so a quote
+at distance `d` from the mid fills with probability `exp(−d / reach_mean)` —
+tighter quotes fill more often, wider quotes less often. Quote placement
+therefore genuinely affects results. Two strategies — a fixed-spread maker and an
+inventory-aware maker (which shifts and widens its quotes against inventory) — are
+run on the **same** deterministic market. Reproduce with:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
@@ -121,16 +125,16 @@ Config: `seed=42`, `steps=5000`, starting cash `100000.0000`, transaction cost
 `0.0002/unit`, spread `0.0100`, max inventory `50`, quote size `5`. Actual output
 from the run:
 
-| Strategy | Total P&L | Return | Sharpe (per-step) | Max DD | Trades | Fill rate | Max abs inv |
-|----------|----------:|-------:|------------------:|-------:|-------:|----------:|------------:|
-| fixed-spread    | 64.44 | 0.064% | 0.432 | ~0.0% | 3919 | 0.401 | 50 |
-| inventory-aware | 89.72 | 0.090% | 0.504 | ~0.0% | 3919 | 0.401 | 50 |
+| Strategy | Total P&L | Return | Sharpe (per-step) | Trades | Fill rate | Avg inv | Max abs inv |
+|----------|----------:|-------:|------------------:|-------:|----------:|--------:|------------:|
+| fixed-spread    | 34.33 | 0.034% | 0.350 | 2174 | 0.222 | 4.79 | 50 |
+| inventory-aware | 34.00 | 0.034% | 0.590 | 2054 | 0.205 | 0.81 | 32 |
 
-In this toy market the aggressor flow is price-insensitive (pure market orders),
-so quote *prices* affect P&L per fill but not which fills occur — both strategies
-therefore trade the same inventory path and differ only in P&L. See
-[docs/DESIGN.md](docs/DESIGN.md) for the accounting conventions, metric
-definitions, and this caveat in full.
+On this market the inventory-aware maker holds far less inventory (avg 0.81 vs
+4.79, max 32 vs 50) at a comparable P&L, giving a higher risk-adjusted return.
+This is a property of the **simulation only** — see [docs/DESIGN.md](docs/DESIGN.md)
+for the market model, its assumptions and limitations, and the accounting and
+metric definitions.
 
 ## Roadmap
 
