@@ -1,159 +1,141 @@
-# Limit Order Book & Exchange Matching Engine
+# Limit Order Book & Matching Engine — with a market-making research stack
 
-A limit order book (LOB) and exchange matching engine written in modern
-**C++20**. The project is a study in market microstructure and matching-engine
-systems design, built as a portfolio piece for quantitative trading engineering.
+A from-scratch **C++20** limit order book and exchange matching engine, plus a
+deterministic market simulator and a reproducible market-making research pipeline
+built on top of it. It is a portfolio project in market microstructure and
+low-level systems design: correct integer money, strict price-time priority, and
+everything seeded so results reproduce exactly.
 
-## Project vision
+The engine core (order book, matching, cancellation, market orders, event
+recording/replay) is a self-contained library. On top of it sits a research
+layer: a synthetic market, two market-making strategies, a backtester with P&L
+and risk analytics, a parameter study, and a visualization pipeline that renders
+figures directly from the experiment output.
 
-The goal is to build, incrementally and from first principles, the core of an
-exchange matching engine:
+> **On "results".** Every strategy, backtest, and parameter-study number in this
+> repository comes from a **toy synthetic market** — a random-walk mid and a
+> simple price-sensitive order-flow model. It is deliberately transparent and is
+> **not** a model of any real venue. The research numbers are meaningful only for
+> comparing the strategies against each other inside the simulation; they are
+> **not** evidence about real-market performance, and no such claim is made.
 
-- A price-time-priority limit order book.
-- A deterministic matching engine that produces trades and executions.
-- Support for the common order lifecycle (submit, amend, cancel).
-- Realistic, integer-based price and quantity representation (no floating-point
-  money).
-- Benchmarks characterising throughput and latency.
-
-## Current status
-
-Implemented so far (each feature is listed only once the code and tests exist):
-
-- A CMake-based C++20 build with a [doctest](https://github.com/doctest/doctest)
-  unit-test suite.
-- **Order model**: strongly typed ids, sides, order types, fixed-point integer
-  prices, quantities, and sequence numbers.
-- **Price-time-priority order book**: separate bid/ask sides, correct price and
-  FIFO ordering, best-quote/level/depth queries.
-- **Matching engine**: deterministic limit-order matching at the maker's price,
-  with full and partial fills.
-- **Order cancellation** by id.
-- **Market orders** (never rest; bounded by available liquidity).
-- **Market-data event recording and deterministic replay**, with a portable
-  text log format.
-- **Benchmarks** for the book and engine (see below).
-- **Market-making simulator** with a strategy interface, average-cost P&L
-  accounting, and inventory risk limits.
-- **Backtesting and analytics** with two strategies (fixed-spread and
-  inventory-aware) and machine-readable results (see Strategy research below).
-- **Price-sensitive synthetic market** where fill probability decays with quote
-  distance, plus a **parameter research study** over a grid of configurations
-  with multi-seed distributions and confidence intervals.
-
-Not yet implemented: order amend/replace and further order types (IOC, FOK, ...).
-See [docs/DESIGN.md](docs/DESIGN.md) for the full roadmap.
-
-All strategy/backtest numbers are from a toy simulator and are **not** claims
-about real-market performance.
-
-## Layout
+## Architecture
 
 ```
-include/lob/    Public headers (the library interface)
-src/            Library sources and the executable
-tests/          Unit tests
-benchmarks/     Performance benchmarks (nanobench)
-examples/       Runnable examples (e.g. the strategy backtest)
-docs/           Design notes and roadmap
+      Market events            (synthetic, seeded order flow)
+           │
+           ▼
+      Order Book               price-time priority, O(1) best quote
+           │
+           ▼
+      Matching Engine          limit + market orders, maker-price fills
+           │
+           ▼
+      Event Log / Replay       record & deterministically reconstruct state
+           │
+           ▼
+      Market Simulator         price-sensitive market + strategy loop
+           │
+           ▼
+      Market-Making Strategy   fixed-spread / inventory-aware quoting
+           │
+           ▼
+      Backtester               run a strategy over the simulated market
+           │
+           ▼
+      Risk / P&L Analytics     average-cost P&L, Sharpe, drawdown, inventory
+           │
+           ▼
+      Research Results         parameter study → JSON/CSV → SVG figures
 ```
 
-## Building
+## Components
 
-Requires a C++20 compiler and CMake 3.20+.
+- **Order book** (`OrderBook`, `PriceLevel`) — separate bid/ask sides as
+  price-ordered maps (best quote is always `begin()`); FIFO time priority within
+  a level; best-quote / level / depth queries; cancellation by id.
+- **Matching engine** (`MatchingEngine`) — continuous price-time-priority
+  matching; limit and market orders; trades execute at the resting maker's price;
+  full and partial fills; deterministic.
+- **Event log & replay** (`MarketEvent`, `EventLog`, `RecordingEngine`) — records
+  submissions, cancellations, and executions to a portable text log and replays
+  the command stream to reconstruct identical state.
+- **Market simulator** (`MarketMakerSimulator`) — a seeded synthetic market where
+  each aggressor's exponential "reach" from the mid makes fill probability decay
+  with quote distance (`exp(−d/reach_mean)`); volatility drives the mid; regimes
+  for calm / volatile / high-volume.
+- **Market makers** (`FixedSpreadMarketMaker`, `InventoryAwareMarketMaker`) — a
+  common `Strategy` interface; the second leans quotes against inventory.
+- **Accounting** (`PnLAccount`) — average-cost P&L entirely in integer ticks;
+  realized / unrealized separated with `realized + unrealized == total`.
+- **Backtester & analytics** (`Backtester`, `BacktestMetrics`) — P&L, return,
+  Sharpe, drawdown, fill rate, inventory, with machine-readable JSON.
+- **Parameter study** (`parameter_study`) — grids over strategy parameters, many
+  seeds per point, distributions with 95% confidence intervals, JSON + CSV.
+- **Visualization** (`viz/`) — pure-stdlib Python that renders SVG figures from
+  the study output (no matplotlib/numpy).
+
+Design principles, data structures, and the synthetic-market model are described
+in [docs/DESIGN.md](docs/DESIGN.md).
+
+## Building and testing
+
+Requires a C++20 compiler and CMake 3.20+. From a clean checkout:
 
 ```bash
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build
 ctest --test-dir build --output-on-failure
-./build/benchmarks/lob_benchmarks   # optional: run the benchmark suite
 ```
 
-## Performance
+This builds the library, the unit tests (doctest, fetched automatically), the
+benchmarks (nanobench), and the example executables. The visualization layer uses
+only the Python 3 standard library; its data-layer tests run with:
 
-Indicative microbenchmark results from **one developer laptop** — these are for
-regression tracking and rough relative cost, **not** a claim of low latency or
-production-exchange throughput. Regenerate them locally before drawing any
-conclusions; absolute numbers depend heavily on hardware, compiler, and build
-flags. See [benchmarks/README.md](benchmarks/README.md) for the methodology and
-what each workload includes.
+```bash
+python -m unittest discover -s viz/tests
+```
+
+## Performance (benchmarks)
+
+Indicative microbenchmark results from **one developer laptop** — for regression
+tracking and rough relative cost, **not** a low-latency or production claim.
+Regenerate locally (`./build/benchmarks/lob_benchmarks`); see
+[benchmarks/README.md](benchmarks/README.md) for methodology.
 
 Environment: 12th Gen Intel Core i7-1255U (10C/12T, base ~1.70 GHz), 15.6 GB RAM,
-Windows 11 Pro (build 26200), GCC 16.1.0 (MSYS2 UCRT64), C++20, `-O3` Release,
-nanobench v4.3.11 (median of ≥20 iterations/epoch).
+Windows 11 Pro (build 26200), GCC 16.1.0 (MSYS2 UCRT64), C++20 `-O3` Release,
+nanobench v4.3.11.
 
-| Benchmark | ns/op | op/s | err% |
-|-----------|------:|-----:|-----:|
-| limit insertion (N=1000) | 251.9 | 3.97 M | 2.8% |
-| limit insertion (N=10000) | 208.0 | 4.81 M | 1.3% |
-| best bid/ask lookup | 0.49 | 2.03 B | 0.3% |
-| insert+cancel cycle (N=1000) | 300.9 | 3.32 M | 3.7% |
-| insert+cancel cycle (N=10000) | 245.4 | 4.07 M | 5.6% |
-| single-order matching (N=2000) | 271.6 | 3.68 M | 3.3% |
-| multi-level matching (K=64) | 272.0 | 3.68 M | 0.9% |
-| market-order execution (K=64) | 256.2 | 3.90 M | 3.2% |
-| mixed order flow (N=20000) | 165.4 | 6.05 M | 3.1% |
+| Benchmark | ns/op | op/s |
+|-----------|------:|-----:|
+| limit insertion (N=1000) | 251.9 | 3.97 M |
+| limit insertion (N=10000) | 208.0 | 4.81 M |
+| best bid/ask lookup | 0.49 | 2.03 B |
+| insert+cancel cycle (N=1000) | 300.9 | 3.32 M |
+| insert+cancel cycle (N=10000) | 245.4 | 4.07 M |
+| single-order matching (N=2000) | 271.6 | 3.68 M |
+| multi-level matching (K=64) | 272.0 | 3.68 M |
+| market-order execution (K=64) | 256.2 | 3.90 M |
+| mixed order flow (N=20000) | 165.4 | 6.05 M |
 
-The `insert+cancel cycle` rows include the insertion cost (you cannot cancel an
-order you did not insert); subtract the matching `limit insertion` baseline to
-isolate cancellation. `best bid/ask lookup` is a pure `const` read and is orders
-of magnitude cheaper than the mutating operations.
+## Strategy research (simulated)
 
-## Strategy research
+Two market makers are compared on identical, deterministic simulated markets. The
+market is **price-sensitive**: a quote at distance `d` from the mid fills with
+probability `exp(−d/reach_mean)`, so quote placement matters.
 
-The project includes a deterministic market-making **simulator** and a
-**backtester** that runs strategies over a toy synthetic market and reports
-performance analytics.
+**Single backtest** (`./build/examples/lob_backtest`, `seed=42`, `steps=5000`):
 
-> **These are simulated results, not real-market performance.** The market is a
-> toy (random-walk mid, coin-flip market-order flow); it is not a model of any
-> real venue and says nothing about how a strategy would perform live. The
-> numbers exist only to compare the two strategies against each other under
-> identical, reproducible conditions.
+| Strategy | Total P&L | Sharpe (per-step) | Trades | Avg inv | Max abs inv |
+|----------|----------:|------------------:|-------:|--------:|------------:|
+| fixed-spread    | 34.33 | 0.350 | 2174 | 4.79 | 50 |
+| inventory-aware | 34.00 | 0.590 | 2054 | 0.81 | 32 |
 
-The synthetic market is **price-sensitive**: each aggressor is a limit order
-whose exponential "reach" from the mid decides how far it will trade, so a quote
-at distance `d` from the mid fills with probability `exp(−d / reach_mean)` —
-tighter quotes fill more often, wider quotes less often. Quote placement
-therefore genuinely affects results. Two strategies — a fixed-spread maker and an
-inventory-aware maker (which shifts and widens its quotes against inventory) — are
-run on the **same** deterministic market. Reproduce with:
-
-```bash
-cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build
-./build/examples/lob_backtest
-```
-
-Config: `seed=42`, `steps=5000`, starting cash `100000.0000`, transaction cost
-`0.0002/unit`, spread `0.0100`, max inventory `50`, quote size `5`. Actual output
-from the run:
-
-| Strategy | Total P&L | Return | Sharpe (per-step) | Trades | Fill rate | Avg inv | Max abs inv |
-|----------|----------:|-------:|------------------:|-------:|----------:|--------:|------------:|
-| fixed-spread    | 34.33 | 0.034% | 0.350 | 2174 | 0.222 | 4.79 | 50 |
-| inventory-aware | 34.00 | 0.034% | 0.590 | 2054 | 0.205 | 0.81 | 32 |
-
-On this market the inventory-aware maker holds far less inventory (avg 0.81 vs
-4.79, max 32 vs 50) at a comparable P&L, giving a higher risk-adjusted return.
-This is a property of the **simulation only** — see [docs/DESIGN.md](docs/DESIGN.md)
-for the market model, its assumptions and limitations, and the accounting and
-metric definitions.
-
-### Parameter study
-
-A larger experiment sweeps market-maker parameters (spread, order quantity,
-inventory limit, skew strength, transaction cost) over a **48-point grid**, runs
-**20 independent seeds** per configuration, and compares both strategies on
-identical markets with 95% confidence intervals. Reproduce with:
-
-```bash
-./build/examples/lob_param_study   # writes study_results.json and study_results.csv
-```
-
-Actual aggregate output (48 configs × 20 seeds, `steps=3000`):
+**Parameter study** (`./build/examples/lob_param_study`, 48-point grid × 20 seeds):
 
 - Mean per-step Sharpe: **fixed-spread 0.375**, **inventory-aware 0.528**.
-- Inventory-aware had the higher mean Sharpe in **44/48** configs, and lower
+- Inventory-aware had the higher mean Sharpe in **44/48** configs and lower
   `|average inventory|` in **48/48**.
 
 Representative config (`spread=100, qty=5, inv_limit=60, skew=6, cost=2`, 20 seeds):
@@ -163,14 +145,55 @@ Representative config (`spread=100, qty=5, inv_limit=60, skew=6, cost=2`, 20 see
 | fixed-spread    | 17.89 | [17.43, 18.35] | 0.315 | 60 |
 | inventory-aware | 16.07 | [15.92, 16.22] | 0.545 | 18 |
 
-Full methodology, parameter effects, and limitations are in
-[docs/RESEARCH.md](docs/RESEARCH.md). **All numbers are generated by the simulator
-— none are hand-entered — and describe the toy market only, not real markets.**
+Across the grid the inventory-aware maker trades modestly less gross P&L for much
+lower inventory and tighter dispersion, i.e. better risk-adjusted return — **in
+this simulation only.** Full methodology, statistics, and interpretation are in
+[docs/RESEARCH.md](docs/RESEARCH.md); the figures and pipeline are in
+[docs/RESULTS.md](docs/RESULTS.md).
+
+### Figures
+
+Generated from the experiment output (a few of nine):
+
+| | |
+|---|---|
+| [Sharpe vs spread](docs/figures/sharpe_vs_spread.svg) | [Inventory vs spread](docs/figures/inventory_vs_spread.svg) |
+| [Strategy comparison](docs/figures/strategy_comparison.svg) | [P&L 95% CIs](docs/figures/pnl_confidence_intervals.svg) |
+| [Sharpe heatmap (inventory-aware)](docs/figures/heatmap_sharpe_inventory_aware.svg) | [Per-seed P&L distribution](docs/figures/pnl_distributions.svg) |
+
+## Reproducing the research end-to-end
+
+One command builds the project, runs the parameter study, and renders every
+figure (requires a C++20 toolchain, CMake, and Python 3 on `PATH`):
+
+```bash
+scripts/run_research.sh          # macOS / Linux / Git Bash
+scripts\run_research.ps1         # Windows PowerShell
+```
+
+Study CSV/JSON land in `results/` (git-ignored, regenerated deterministically);
+figures land in `docs/figures/`.
+
+## Layout
+
+```
+include/lob/    Public headers (the library interface)
+src/            Library sources and the executable
+tests/          C++ unit tests (doctest)
+benchmarks/     Performance benchmarks (nanobench)
+examples/       Runnable examples: backtest, parameter study
+viz/            Python (stdlib) visualization package + its tests
+scripts/        Reproducible research pipeline
+docs/           Design notes, research report, results, figures
+```
 
 ## Roadmap
 
-See [docs/DESIGN.md](docs/DESIGN.md) for the design notes and the planned
-milestone roadmap.
+Implemented: order book, matching engine, cancellation, market orders, event
+recording/replay, benchmarks, market-making simulator, backtesting, a
+price-sensitive market model, the parameter study, and the visualization layer.
+Planned: order amend/replace and further order types (IOC, FOK). See
+[docs/DESIGN.md](docs/DESIGN.md) for the full milestone roadmap.
 
 ## License
 

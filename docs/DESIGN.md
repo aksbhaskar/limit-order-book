@@ -17,6 +17,21 @@ is only marked complete once the corresponding code and tests land.
 - **Testability first.** Every layer ships with unit tests before the next layer
   is built on top of it.
 
+## System architecture
+
+The project is an engine core with a research stack layered on top; data flows in
+one direction:
+
+```
+Market events -> Order Book -> Matching Engine -> Event Log / Replay
+              -> Market Simulator -> Market-Making Strategy -> Backtester
+              -> Risk / P&L Analytics -> Research Results (study -> JSON/CSV -> figures)
+```
+
+Each stage is a small, independently tested component built only on the public
+API of the stage(s) below it, so the engine core has no knowledge of the research
+layer above it.
+
 ## Roadmap
 
 | Milestone | Description                                             | Status      |
