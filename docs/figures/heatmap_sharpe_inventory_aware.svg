@@ -1,0 +1,24 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='720' height='460' viewBox='0 0 720 460'>
+<rect width='720' height='460' fill='white'/>
+<text x='360' y='26' text-anchor='middle' font-size='17' font-weight='bold' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>Mean Sharpe grid -- inventory-aware</text>
+<rect x='96.0' y='266.0' width='267.0' height='106.0' fill='#7cad9c' stroke='white' stroke-width='1'/>
+<text x='229.5' y='323.0' text-anchor='middle' font-size='11' fill='#111'>0.51</text>
+<rect x='363.0' y='266.0' width='267.0' height='106.0' fill='#78aa9f' stroke='white' stroke-width='1'/>
+<text x='496.5' y='323.0' text-anchor='middle' font-size='11' fill='#111'>0.51</text>
+<text x='88.0' y='323.0' text-anchor='end' font-size='12' fill='#666666'>60</text>
+<rect x='96.0' y='160.0' width='267.0' height='106.0' fill='#ff7f00' stroke='white' stroke-width='1'/>
+<text x='229.5' y='217.0' text-anchor='middle' font-size='11' fill='#111'>0.57</text>
+<rect x='363.0' y='160.0' width='267.0' height='106.0' fill='#ff8000' stroke='white' stroke-width='1'/>
+<text x='496.5' y='217.0' text-anchor='middle' font-size='11' fill='#111'>0.57</text>
+<text x='88.0' y='217.0' text-anchor='end' font-size='12' fill='#666666'>100</text>
+<rect x='96.0' y='54.0' width='267.0' height='106.0' fill='#337fe5' stroke='white' stroke-width='1'/>
+<text x='229.5' y='111.0' text-anchor='middle' font-size='11' fill='#111'>0.50</text>
+<rect x='363.0' y='54.0' width='267.0' height='106.0' fill='#337fe5' stroke='white' stroke-width='1'/>
+<text x='496.5' y='111.0' text-anchor='middle' font-size='11' fill='#111'>0.50</text>
+<text x='88.0' y='111.0' text-anchor='end' font-size='12' fill='#666666'>160</text>
+<text x='229.5' y='390.0' text-anchor='middle' font-size='12' fill='#666666'>30</text>
+<text x='496.5' y='390.0' text-anchor='middle' font-size='12' fill='#666666'>60</text>
+<text x='363' y='416' text-anchor='middle' font-size='13' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>max inventory</text>
+<text x='20' y='213' text-anchor='middle' font-size='13' fill='#1a1a1a' transform='rotate(-90 20 213)' font-family='Helvetica,Arial,sans-serif'>spread ticks</text>
+<text x='96' y='450' font-size='11' fill='#666666' font-family='Helvetica,Arial,sans-serif'>Simulated toy market -- not real-market performance. inventory-aware; cell = mean sharpe (Sharpe) over other axes and seeds.</text>
+</svg>

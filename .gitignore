@@ -34,5 +34,15 @@ compile_commands.json
 .DS_Store
 Thumbs.db
 
+# Generated experiment data (regenerated deterministically by scripts/run_research)
+/results/
+study_results.json
+study_results.csv
+study_runs.csv
+
+# Python
+__pycache__/
+*.pyc
+
 # Claude Code machine-local settings
 .claude/settings.local.json

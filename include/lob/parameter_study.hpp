@@ -56,6 +56,22 @@ struct Aggregate {
     friend bool operator==(const Aggregate&, const Aggregate&) = default;
 };
 
+// One individual backtest run (a single seed for one strategy/parameter point).
+// These raw samples back the per-seed distribution figures.
+struct RunRecord {
+    StrategyKind strategy = StrategyKind::FixedSpread;
+    ParamPoint params;
+    std::uint64_t seed = 0;
+
+    double total_pnl = 0.0;
+    double sharpe = 0.0;
+    double max_drawdown = 0.0;
+    double fill_rate = 0.0;
+    double average_inventory = 0.0;
+    std::int64_t max_abs_inventory = 0;
+    std::uint64_t trade_count = 0;
+};
+
 // Aggregated results for one (strategy, parameter point) over all seeds.
 struct StudyCell {
     StrategyKind strategy = StrategyKind::FixedSpread;
@@ -80,9 +96,11 @@ struct StudyConfig {
 
 struct StudyResult {
     std::vector<StudyCell> cells;   // one per (parameter point, strategy)
+    std::vector<RunRecord> runs;    // one per (parameter point, strategy, seed)
 
-    std::string to_json() const;
-    std::string to_csv() const;
+    std::string to_json() const;         // aggregated cells, JSON
+    std::string to_csv() const;          // aggregated cells, CSV
+    std::string runs_to_csv() const;     // raw per-seed runs, CSV
 };
 
 // Runs the experiment: for every parameter point, every strategy, and every seed,

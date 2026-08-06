@@ -33,11 +33,13 @@ is only marked complete once the corresponding code and tests land.
 | 10        | Strategy backtesting and performance analytics          | Done        |
 | 11        | Price-sensitive synthetic market dynamics               | Done        |
 | 12        | Market-making parameter research study                  | Done        |
-| 13        | Order amend / replace                                   | Planned     |
-| 14        | Further order types (IOC, FOK, ...)                     | Planned     |
+| 13        | Research result visualizations                          | Done        |
+| 14        | Order amend / replace                                   | Planned     |
+| 15        | Further order types (IOC, FOK, ...)                     | Planned     |
 
-Only milestones 1–12 are implemented at present. Everything from milestone 13
-onward is a plan, not a promise of existing functionality.
+Only milestones 1–13 are implemented at present. Everything from milestone 14
+onward is a plan, not a promise of existing functionality. The visualization
+pipeline is documented in [RESULTS.md](RESULTS.md).
 
 ## Order book architecture
 

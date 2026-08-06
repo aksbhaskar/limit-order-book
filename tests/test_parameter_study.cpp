@@ -84,6 +84,24 @@ TEST_CASE("A study produces one cell per (parameter point, strategy)") {
     }
 }
 
+TEST_CASE("Raw per-seed runs are recorded and serialized") {
+    const StudyResult r = run_study(small_study());
+    // 4 points * 2 strategies * 4 seeds.
+    CHECK(r.runs.size() == r.cells.size() * 4);
+    CHECK(r.runs.size() == 32);
+
+    const std::string csv = r.runs_to_csv();
+    CHECK(csv.find("strategy,spread_ticks,") == 0);
+    CHECK(csv.find(",seed,total_pnl,sharpe,") != std::string::npos);
+    std::size_t lines = 0;
+    for (char ch : csv) {
+        if (ch == '\n') {
+            ++lines;
+        }
+    }
+    CHECK(lines == r.runs.size() + 1);   // header + one row per run
+}
+
 TEST_CASE("A study is reproducible") {
     const StudyResult a = run_study(small_study());
     const StudyResult b = run_study(small_study());

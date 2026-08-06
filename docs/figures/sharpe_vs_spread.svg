@@ -1,0 +1,38 @@
+<svg xmlns='http://www.w3.org/2000/svg' width='720' height='460' viewBox='0 0 720 460'>
+<rect width='720' height='460' fill='white'/>
+<text x='360' y='26' text-anchor='middle' font-size='17' font-weight='bold' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>Risk-adjusted return vs quoted spread</text>
+<line x1='78' y1='343.3' x2='570' y2='343.3' stroke='#e3e3e3' stroke-width='1'/>
+<text x='70' y='347.3' text-anchor='end' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>0.35</text>
+<line x1='78' y1='284.1' x2='570' y2='284.1' stroke='#e3e3e3' stroke-width='1'/>
+<text x='70' y='288.1' text-anchor='end' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>0.4</text>
+<line x1='78' y1='224.9' x2='570' y2='224.9' stroke='#e3e3e3' stroke-width='1'/>
+<text x='70' y='228.9' text-anchor='end' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>0.45</text>
+<line x1='78' y1='165.7' x2='570' y2='165.7' stroke='#e3e3e3' stroke-width='1'/>
+<text x='70' y='169.7' text-anchor='end' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>0.5</text>
+<line x1='78' y1='106.6' x2='570' y2='106.6' stroke='#e3e3e3' stroke-width='1'/>
+<text x='70' y='110.6' text-anchor='end' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>0.55</text>
+<line x1='78.0' y1='372' x2='78.0' y2='54' stroke='#e3e3e3' stroke-width='1'/>
+<text x='78.0' y='392' text-anchor='middle' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>60</text>
+<line x1='274.8' y1='372' x2='274.8' y2='54' stroke='#e3e3e3' stroke-width='1'/>
+<text x='274.8' y='392' text-anchor='middle' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>100</text>
+<line x1='570.0' y1='372' x2='570.0' y2='54' stroke='#e3e3e3' stroke-width='1'/>
+<text x='570.0' y='392' text-anchor='middle' font-size='12' fill='#666666' font-family='Helvetica,Arial,sans-serif'>160</text>
+<rect x='78' y='54' width='492' height='318' fill='none' stroke='#333333' stroke-width='1.2'/>
+<polygon points='78.0,323.9 274.8,269.9 570.0,312.3 570.0,329.1 274.8,293.5 78.0,350.1' fill='#1f6feb' fill-opacity='0.15' stroke='none'/>
+<polyline points='78.0,337.0 274.8,281.7 570.0,320.7' fill='none' stroke='#1f6feb' stroke-width='2.2'/>
+<circle cx='78.0' cy='337.0' r='3.2' fill='#1f6feb'/>
+<circle cx='274.8' cy='281.7' r='3.2' fill='#1f6feb'/>
+<circle cx='570.0' cy='320.7' r='3.2' fill='#1f6feb'/>
+<polygon points='78.0,138.5 274.8,75.9 570.0,164.7 570.0,168.6 274.8,83.0 78.0,164.2' fill='#d9730d' fill-opacity='0.15' stroke='none'/>
+<polyline points='78.0,151.4 274.8,79.5 570.0,166.7' fill='none' stroke='#d9730d' stroke-width='2.2'/>
+<circle cx='78.0' cy='151.4' r='3.2' fill='#d9730d'/>
+<circle cx='274.8' cy='79.5' r='3.2' fill='#d9730d'/>
+<circle cx='570.0' cy='166.7' r='3.2' fill='#d9730d'/>
+<text x='324' y='416' text-anchor='middle' font-size='13' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>Quoted spread (ticks)</text>
+<text x='20' y='213' text-anchor='middle' font-size='13' fill='#1a1a1a' transform='rotate(-90 20 213)' font-family='Helvetica,Arial,sans-serif'>Mean per-step Sharpe</text>
+<rect x='586' y='51' width='12' height='12' fill='#1f6feb'/>
+<text x='604' y='61' font-size='12' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>fixed-spread</text>
+<rect x='586' y='71' width='12' height='12' fill='#d9730d'/>
+<text x='604' y='81' font-size='12' fill='#1a1a1a' font-family='Helvetica,Arial,sans-serif'>inventory-aware</text>
+<text x='78' y='450' font-size='11' fill='#666666' font-family='Helvetica,Arial,sans-serif'>Simulated toy market -- not real-market performance. Aggregated over all other parameters and 20 seeds; band = 95% CI.</text>
+</svg>

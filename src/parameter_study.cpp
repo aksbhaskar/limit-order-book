@@ -118,6 +118,11 @@ StudyResult run_study(const StudyConfig& config) {
                 avg_inv.push_back(m.average_inventory);
                 max_inv.push_back(static_cast<double>(m.max_abs_inventory));
                 trades.push_back(static_cast<double>(m.trade_count));
+
+                out.runs.push_back(RunRecord{kind, p, seed, m.total_pnl, m.sharpe,
+                                             m.max_drawdown, m.fill_rate,
+                                             m.average_inventory, m.max_abs_inventory,
+                                             m.trade_count});
             }
 
             StudyCell cell;
@@ -166,6 +171,23 @@ std::string StudyResult::to_json() const {
             << "\"trade_count_mean\":" << num(c.trade_count.mean) << "}";
     }
     out << "]";
+    return out.str();
+}
+
+std::string StudyResult::runs_to_csv() const {
+    std::ostringstream out;
+    out << "strategy,spread_ticks,order_quantity,max_inventory,skew_ticks_per_unit,"
+           "transaction_cost_ticks,seed,total_pnl,sharpe,max_drawdown,fill_rate,"
+           "average_inventory,max_abs_inventory,trade_count\n";
+    for (const RunRecord& r : runs) {
+        out << to_string(r.strategy) << ',' << r.params.spread_ticks << ','
+            << r.params.order_quantity << ',' << r.params.max_inventory << ','
+            << r.params.skew_ticks_per_unit << ',' << r.params.transaction_cost_ticks
+            << ',' << r.seed << ',' << num(r.total_pnl) << ',' << num(r.sharpe) << ','
+            << num(r.max_drawdown) << ',' << num(r.fill_rate) << ','
+            << num(r.average_inventory) << ',' << r.max_abs_inventory << ','
+            << r.trade_count << '\n';
+    }
     return out.str();
 }
 

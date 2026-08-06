@@ -67,6 +67,8 @@ int main() {
         json << result.to_json() << '\n';
         std::ofstream csv("study_results.csv");
         csv << result.to_csv();
+        std::ofstream runs("study_runs.csv");
+        runs << result.runs_to_csv();
     }
 
     std::cout << "SIMULATED parameter study -- results describe the synthetic "
@@ -74,7 +76,7 @@ int main() {
     std::cout << "grid points=" << (result.cells.size() / 2)
               << "  strategies=2  seeds=" << study.seeds.size()
               << "  steps=" << study.market.steps << '\n';
-    std::cout << "wrote study_results.json and study_results.csv\n\n";
+    std::cout << "wrote study_results.json, study_results.csv, and study_runs.csv\n\n";
 
     // Headline comparison at a representative configuration.
     const ParamPoint rep{100, 5, 60, 6, 2};
