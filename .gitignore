@@ -43,6 +43,3 @@ study_runs.csv
 # Python
 __pycache__/
 *.pyc
-
-# Claude Code machine-local settings
-.claude/settings.local.json
