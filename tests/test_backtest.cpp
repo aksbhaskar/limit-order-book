@@ -42,6 +42,22 @@ InventoryAwareConfig inv_cfg(std::int64_t max_inv = 50) {
     return c;
 }
 
+void check_exact_metrics(const BacktestMetrics& trace, const BacktestMetrics& streaming) {
+    CHECK(streaming.strategy == trace.strategy);
+    CHECK(streaming.total_pnl == trace.total_pnl);
+    CHECK(streaming.realized_pnl == trace.realized_pnl);
+    CHECK(streaming.unrealized_pnl == trace.unrealized_pnl);
+    CHECK(streaming.return_pct == trace.return_pct);
+    CHECK(streaming.max_drawdown == trace.max_drawdown);
+    CHECK(streaming.volatility == trace.volatility);
+    CHECK(streaming.sharpe == trace.sharpe);
+    CHECK(streaming.trade_count == trace.trade_count);
+    CHECK(streaming.fill_rate == trace.fill_rate);
+    CHECK(streaming.average_inventory == trace.average_inventory);
+    CHECK(streaming.max_abs_inventory == trace.max_abs_inventory);
+    CHECK(streaming.to_json() == trace.to_json());
+}
+
 }  // namespace
 
 TEST_CASE("Backtest metrics are internally consistent") {
@@ -134,4 +150,28 @@ TEST_CASE("Results serialize to machine-readable JSON") {
     const std::string arr = results_to_json({m, m});
     CHECK(arr.front() == '[');
     CHECK(arr.back() == ']');
+}
+
+TEST_CASE("Metrics-only backtests exactly equal independent trace-derived metrics") {
+    for (MarketRegime regime : {MarketRegime::Calm, MarketRegime::Volatile,
+                               MarketRegime::HighVolume}) {
+        for (std::uint64_t steps : {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{1000}}) {
+            for (std::int64_t cash : {std::int64_t{0}, std::int64_t{1'000'000'000},
+                                      std::int64_t{-1'000'000}}) {
+                for (std::int64_t fee : {std::int64_t{0}, std::int64_t{5}}) {
+                    SimConfig cfg = regime_config(regime);
+                    cfg.steps = steps;
+                    cfg.seed = 123;
+                    cfg.starting_cash_ticks = cash;
+                    cfg.transaction_cost_ticks = fee;
+                    FixedSpreadMarketMaker fixed_trace(fixed_cfg()), fixed_stream(fixed_cfg());
+                    InventoryAwareMarketMaker inv_trace(inv_cfg()), inv_stream(inv_cfg());
+                    check_exact_metrics(Backtester(cfg).run(fixed_trace),
+                                        Backtester(cfg).run(fixed_stream, SimulationMode::MetricsOnly));
+                    check_exact_metrics(Backtester(cfg).run(inv_trace),
+                                        Backtester(cfg).run(inv_stream, SimulationMode::MetricsOnly));
+                }
+            }
+        }
+    }
 }

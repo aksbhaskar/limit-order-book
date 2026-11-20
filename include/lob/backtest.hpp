@@ -52,7 +52,8 @@ class Backtester {
 public:
     explicit Backtester(SimConfig market) : market_(market) {}
 
-    BacktestMetrics run(Strategy& strategy) const;
+    BacktestMetrics run(Strategy& strategy,
+                        SimulationMode mode = SimulationMode::Trace) const;
 
     const SimConfig& market() const noexcept { return market_; }
 

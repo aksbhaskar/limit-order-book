@@ -19,8 +19,8 @@ std::string json_number(double value) {
 
 }  // namespace
 
-BacktestMetrics Backtester::run(Strategy& strategy) const {
-    const SimResult sim = MarketMakerSimulator(market_).run(strategy);
+BacktestMetrics Backtester::run(Strategy& strategy, SimulationMode mode) const {
+    const SimResult sim = MarketMakerSimulator(market_).run(strategy, mode);
 
     BacktestMetrics m;
     m.strategy = strategy.name();
@@ -34,6 +34,15 @@ BacktestMetrics Backtester::run(Strategy& strategy) const {
 
     const double start_cash = static_cast<double>(market_.starting_cash_ticks) / scale;
     m.return_pct = (market_.starting_cash_ticks != 0) ? (m.total_pnl / start_cash) : 0.0;
+
+    if (mode == SimulationMode::MetricsOnly) {
+        m.max_drawdown = sim.metrics.max_drawdown;
+        m.volatility = sim.metrics.volatility;
+        m.sharpe = sim.metrics.sharpe;
+        m.average_inventory = sim.metrics.average_inventory;
+        m.max_abs_inventory = sim.metrics.max_abs_inventory;
+        return m;
+    }
 
     // Per-step returns are normalised by the (constant) starting cash so the
     // denominator can never be zero mid-curve; equity = starting cash + P&L.

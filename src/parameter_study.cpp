@@ -32,7 +32,7 @@ BacktestMetrics run_one(StrategyKind kind, const ParamPoint& p, const SimConfig&
         c.max_inventory = p.max_inventory;
         c.order_quantity = Quantity{p.order_quantity};
         FixedSpreadMarketMaker mm(c);
-        return Backtester(market).run(mm);
+        return Backtester(market).run(mm, SimulationMode::MetricsOnly);
     }
     InventoryAwareConfig c;
     c.base_spread = Price::from_ticks(p.spread_ticks);
@@ -41,7 +41,7 @@ BacktestMetrics run_one(StrategyKind kind, const ParamPoint& p, const SimConfig&
     c.skew_ticks_per_unit = p.skew_ticks_per_unit;
     c.widen_ticks_per_unit = 1;
     InventoryAwareMarketMaker mm(c);
-    return Backtester(market).run(mm);
+    return Backtester(market).run(mm, SimulationMode::MetricsOnly);
 }
 
 }  // namespace

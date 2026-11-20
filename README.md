@@ -256,6 +256,12 @@ mkdir -p results && (cd results && ../build/examples/lob_param_study)
 python viz/plot_study.py --runs results/study_runs.csv --outdir docs/figures
 ```
 
+Parameter studies use `SimulationMode::MetricsOnly`: returns, drawdown and
+inventory statistics are accumulated during each run without retaining its
+`StepRecord` trace. `MarketMakerSimulator::run` and `Backtester::run` default to
+`SimulationMode::Trace` for callers that need time-series CSVs or plots; pass
+`SimulationMode::MetricsOnly` to omit the trace while retaining the same metrics.
+
 The full research pipeline (build → study → figures) is also wrapped in one
 command:
 
