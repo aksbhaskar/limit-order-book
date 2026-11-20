@@ -3,7 +3,8 @@
 #include <cstddef>
 #include <functional>
 #include <map>
-#include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "lob/order.hpp"
@@ -113,8 +114,8 @@ private:
 
     BidMap bids_;
     AskMap asks_;
-    std::map<OrderId, Locator> live_;   // resting order id -> its level location
-    std::set<OrderId> filled_;          // ids of orders fully filled while resting
+    std::unordered_map<OrderId, Locator> live_;   // resting order id -> its level location
+    std::unordered_set<OrderId> filled_;          // ids of orders fully filled while resting
 };
 
 }  // namespace lob
