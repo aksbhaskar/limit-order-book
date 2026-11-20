@@ -41,6 +41,10 @@ public:
     // Returns the resulting trades and fill/remaining accounting.
     SubmitResult submit(Order order);
 
+    // Overwrites a caller-owned result, retaining its trade-vector capacity.
+    // Trades remain owned by result, never by the engine.
+    void submit(Order order, SubmitResult& result);
+
     // Cancels a resting order by id. See OrderBook::cancel for the semantics.
     CancelResult cancel(OrderId id) { return book_.cancel(id); }
 

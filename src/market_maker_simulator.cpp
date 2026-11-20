@@ -130,6 +130,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) con
     MetricsAccumulator metrics(config_.starting_cash_ticks);
 
     MatchingEngine engine;
+    SubmitResult submission;
     PnLAccount account(config_.starting_cash_ticks);
     std::mt19937_64 rng(config_.seed);
 
@@ -177,7 +178,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) con
         if (decision.quote_bid && !decision.bid_quantity.is_zero()) {
             const OrderId id{next_id++};
             engine.submit(Order(id, Side::Buy, OrderType::Limit, decision.bid_price,
-                                decision.bid_quantity, Sequence{next_seq++}));
+                                decision.bid_quantity, Sequence{next_seq++}), submission);
             mm_bid = id;
             ++result.quotes_placed;
             record.quoted_bid = true;
@@ -187,7 +188,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) con
         if (decision.quote_ask && !decision.ask_quantity.is_zero()) {
             const OrderId id{next_id++};
             engine.submit(Order(id, Side::Sell, OrderType::Limit, decision.ask_price,
-                                decision.ask_quantity, Sequence{next_seq++}));
+                                decision.ask_quantity, Sequence{next_seq++}), submission);
             mm_ask = id;
             ++result.quotes_placed;
             record.quoted_ask = true;
@@ -217,11 +218,11 @@ SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) con
             }
             const Side aggr_side = aggressor_buys ? Side::Buy : Side::Sell;
             const OrderId id{next_id++};
-            const SubmitResult sr = engine.submit(Order(id, aggr_side, OrderType::Limit,
-                                                        Price::from_ticks(limit_ticks),
-                                                        Quantity{aq}, Sequence{next_seq++}));
+            engine.submit(Order(id, aggr_side, OrderType::Limit,
+                                Price::from_ticks(limit_ticks),
+                                Quantity{aq}, Sequence{next_seq++}), submission);
 
-            for (const Trade& trade : sr.trades) {
+            for (const Trade& trade : submission.trades) {
                 Side mm_side;
                 if (mm_bid && trade.maker_id == *mm_bid) {
                     mm_side = Side::Buy;   // our bid was hit: we bought
@@ -243,7 +244,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) con
 
             // Immediate-or-cancel: drop any unfilled aggressor remainder so it
             // never rests as phantom liquidity.
-            if (sr.resting) {
+            if (submission.resting) {
                 engine.cancel(id);
             }
         }

@@ -1,5 +1,7 @@
 #include <doctest/doctest.h>
 
+#include <stdexcept>
+
 #include "lob/matching_engine.hpp"
 
 using namespace lob;
@@ -214,4 +216,70 @@ TEST_CASE("Trade records carry maker and taker sequence information") {
     REQUIRE(r.trades.size() == 1);
     CHECK(r.trades[0].maker_sequence == Sequence{11});
     CHECK(r.trades[0].taker_sequence == Sequence{22});
+}
+
+TEST_CASE("Caller-owned submission results match the owning API and reuse storage") {
+    MatchingEngine reference, engine;
+    SubmitResult result;
+    result.trades.reserve(128);
+    const std::size_t capacity = result.trades.capacity();
+    const auto check = [&](Order order) {
+        const SubmitResult expected = reference.submit(order);
+        engine.submit(order, result);
+        CHECK(result.order_id == expected.order_id);
+        CHECK(result.trades == expected.trades);
+        CHECK(result.filled_quantity == expected.filled_quantity);
+        CHECK(result.remaining_quantity == expected.remaining_quantity);
+        CHECK(result.resting == expected.resting);
+        CHECK(result.trades.capacity() == capacity);
+    };
+
+    check(Order(OrderId{1}, Side::Buy, OrderType::Market, Price{}, Quantity{1}, Sequence{1}));
+    for (std::uint64_t i = 2; i < 130; ++i) {
+        check(sell(OrderId{i}, px(100), Quantity{2}, Sequence{i}));
+    }
+    check(buy(OrderId{130}, px(100), Quantity{1}, Sequence{130}));
+    REQUIRE(result.trades.size() == 1);
+    const Trade* storage = result.trades.data();
+    check(Order(OrderId{131}, Side::Buy, OrderType::Market, Price{}, Quantity{300}, Sequence{131}));
+    CHECK(result.trades.size() == 128);
+    CHECK(result.trades.data() == storage);
+    check(buy(OrderId{132}, px(99), Quantity{3}, Sequence{132}));
+    CHECK(result.trades.empty());
+    CHECK(result.resting);
+    check(sell(OrderId{133}, px(99), Quantity{5}, Sequence{133}));
+    CHECK(result.trades.size() == 1);
+    CHECK(result.resting);
+    CHECK(result.remaining_quantity == Quantity{2});
+    CHECK(result.trades.data() == storage);
+}
+
+TEST_CASE("Submission results own their trades independently of later submissions and engine lifetime") {
+    SubmitResult owned, reused;
+    {
+        MatchingEngine engine;
+        engine.submit(sell(OrderId{1}, px(100), Quantity{1}, Sequence{1}));
+        owned = engine.submit(buy(OrderId{2}, px(100), Quantity{1}, Sequence{2}));
+        engine.submit(sell(OrderId{3}, px(101), Quantity{1}, Sequence{3}), reused);
+        engine.submit(buy(OrderId{4}, px(101), Quantity{1}, Sequence{4}), reused);
+    }
+    REQUIRE(owned.trades.size() == 1);
+    REQUIRE(reused.trades.size() == 1);
+    CHECK(owned.trades[0].maker_id == OrderId{1});
+    CHECK(owned.trades[0].price == px(100));
+    CHECK(reused.trades[0].maker_id == OrderId{3});
+    CHECK(reused.trades[0].price == px(101));
+}
+
+TEST_CASE("A caller-owned result remains reusable after a duplicate order error") {
+    MatchingEngine engine;
+    SubmitResult result;
+    const Order maker = sell(OrderId{1}, px(100), Quantity{1}, Sequence{1});
+    engine.submit(maker, result);
+    CHECK_THROWS_AS(engine.submit(maker, result), std::invalid_argument);
+    engine.submit(buy(OrderId{2}, px(100), Quantity{1}, Sequence{2}), result);
+    REQUIRE(result.trades.size() == 1);
+    CHECK(result.trades[0].maker_id == OrderId{1});
+    CHECK_FALSE(result.resting);
+    CHECK(result.remaining_quantity.is_zero());
 }

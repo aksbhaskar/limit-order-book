@@ -20,7 +20,16 @@ bool crosses(Side taker_side, Price taker_price, Price resting_price) noexcept {
 
 SubmitResult MatchingEngine::submit(Order order) {
     SubmitResult result;
+    submit(order, result);
+    return result;
+}
+
+void MatchingEngine::submit(Order order, SubmitResult& result) {
+    result.trades.clear();
     result.order_id = order.id();
+    result.filled_quantity = Quantity{};
+    result.remaining_quantity = Quantity{};
+    result.resting = false;
 
     const Quantity original = order.quantity();
     const Side opposite = order.side() == Side::Buy ? Side::Sell : Side::Buy;
@@ -69,8 +78,6 @@ SubmitResult MatchingEngine::submit(Order order) {
         book_.add_order(order);
         result.resting = true;
     }
-
-    return result;
 }
 
 }  // namespace lob

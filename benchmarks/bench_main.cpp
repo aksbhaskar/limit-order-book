@@ -259,6 +259,23 @@ int main() {
             });
     }
 
+    // The same single-order workload with caller-owned trade storage.
+    {
+        const std::size_t n = 2000;
+        const auto pairs = gen_match_pairs(n, 0xD00Du);
+        bench.batch(static_cast<double>(n))
+            .run("single matching reused result (N=" + std::to_string(n) + ")", [&] {
+                MatchingEngine engine;
+                SubmitResult result;
+                for (const Pair& p : pairs) {
+                    engine.submit(p.maker, result);
+                    engine.submit(p.taker, result);
+                }
+                nb::doNotOptimizeAway(result);
+                nb::doNotOptimizeAway(engine);
+            });
+    }
+
     // 5. Multi-level matching: a single limit taker sweeps K price levels.
     {
         const int k = 64;
