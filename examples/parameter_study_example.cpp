@@ -9,11 +9,13 @@
 // The market is a deliberately simple synthetic model; results describe the
 // simulation only and are not evidence about real markets.
 
+#include <charconv>
 #include <cstdint>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <string>
+#include <string_view>
 
 #include "lob/parameter_study.hpp"
 #include "lob/price.hpp"
@@ -34,8 +36,20 @@ const StudyCell* cell_for(const StudyResult& r, StrategyKind kind,
 
 }  // namespace
 
-int main() {
+int main(int argc, char* argv[]) {
     StudyConfig study;
+    if (argc > 2) {
+        std::cerr << "usage: lob_param_study [threads (0=automatic)]\n";
+        return 1;
+    }
+    if (argc == 2) {
+        const std::string_view arg(argv[1]);
+        const auto parsed = std::from_chars(arg.data(), arg.data() + arg.size(), study.threads);
+        if (parsed.ec != std::errc{} || parsed.ptr != arg.data() + arg.size()) {
+            std::cerr << "usage: lob_param_study [threads (0=automatic)]\n";
+            return 1;
+        }
+    }
 
     // Base synthetic market (seed is overridden per run; cost comes from the grid).
     study.market.steps = 3000;

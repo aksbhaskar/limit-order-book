@@ -21,7 +21,8 @@ add_library(lob
     parameter_study.cpp
 )
 target_link_libraries(lob PUBLIC lob_headers)
-target_link_libraries(lob PRIVATE lob_warnings)
+find_package(Threads REQUIRED)
+target_link_libraries(lob PRIVATE lob_warnings Threads::Threads)
 
 # Application executable.
 add_executable(lob_app main.cpp)
