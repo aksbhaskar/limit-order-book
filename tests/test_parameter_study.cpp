@@ -150,3 +150,46 @@ TEST_CASE("JSON and CSV output are well-formed") {
     CHECK(lines == r.cells.size() + 1);   // header + one row per cell
     CHECK(csv.find("strategy,spread_ticks,") == 0);
 }
+
+TEST_CASE("Study serialization is identical across worker counts") {
+    StudyConfig config = small_study();
+    config.threads = 1;
+    const StudyResult serial = run_study(config);
+    for (std::size_t threads : {std::size_t{0}, std::size_t{3}, std::size_t{64}}) {
+        config.threads = threads;
+        const StudyResult parallel = run_study(config);
+        CHECK(parallel.to_csv() == serial.to_csv());
+        CHECK(parallel.to_json() == serial.to_json());
+        CHECK(parallel.runs_to_csv() == serial.runs_to_csv());
+    }
+}
+
+TEST_CASE("Empty studies preserve deterministic cells without scheduling jobs") {
+    for (std::size_t threads : {std::size_t{1}, std::size_t{4}}) {
+        StudyConfig config = small_study();
+        config.threads = threads;
+        config.seeds.clear();
+        const StudyResult no_seeds = run_study(config);
+        CHECK(no_seeds.runs.empty());
+        REQUIRE(no_seeds.cells.size() == 8);
+        CHECK(no_seeds.cells.front().pnl.n == 0);
+        config.grid.spreads.clear();
+        const StudyResult no_grid = run_study(config);
+        CHECK(no_grid.cells.empty());
+        CHECK(no_grid.runs.empty());
+    }
+}
+
+TEST_CASE("Study workers handle a market with no simulation steps") {
+    for (std::size_t threads : {std::size_t{1}, std::size_t{4}}) {
+        StudyConfig config = small_study();
+        config.threads = threads;
+        config.market.steps = 0;
+        const StudyResult result = run_study(config);
+        REQUIRE(result.runs.size() == 32);
+        for (const RunRecord& run : result.runs) {
+            CHECK(run.total_pnl == 0.0);
+            CHECK(run.trade_count == 0);
+        }
+    }
+}

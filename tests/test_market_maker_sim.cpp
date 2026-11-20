@@ -1,6 +1,7 @@
 #include <doctest/doctest.h>
 
 #include <cstdlib>
+#include <stdexcept>
 
 #include "lob/market_maker.hpp"
 #include "lob/market_maker_simulator.hpp"
@@ -31,6 +32,43 @@ MarketMakerConfig mm_config(std::int64_t max_inv = 50) {
 }
 
 }  // namespace
+
+TEST_CASE("Metrics-only simulations retain identical summaries without allocating a trace") {
+    for (std::uint64_t steps : {std::uint64_t{0}, std::uint64_t{1}, std::uint64_t{3000}}) {
+        for (unsigned flow : {0u, 800u}) {
+            SimConfig cfg = base_config();
+            cfg.steps = steps;
+            cfg.order_arrival_permille = flow;
+            FixedSpreadMarketMaker trace_strategy(mm_config()), metrics_strategy(mm_config());
+            SimResult trace = MarketMakerSimulator(cfg).run(trace_strategy);
+            const SimResult metrics =
+                MarketMakerSimulator(cfg).run(metrics_strategy, SimulationMode::MetricsOnly);
+            CHECK(metrics.steps.empty());
+            CHECK(metrics.steps.capacity() == 0);
+            CHECK(trace.steps.size() == steps);
+            trace.steps.clear();
+            CHECK(metrics == trace);
+        }
+    }
+}
+
+TEST_CASE("Simulation modes propagate invalid strategy quotes") {
+    class InvalidStrategy : public Strategy {
+    public:
+        QuoteDecision quote(const MarketState&) override {
+            QuoteDecision decision;
+            decision.quote_bid = true;
+            decision.bid_quantity = Quantity{1};
+            return decision;
+        }
+        std::string name() const override { return "invalid"; }
+    };
+    for (SimulationMode mode : {SimulationMode::Trace, SimulationMode::MetricsOnly}) {
+        InvalidStrategy strategy;
+        CHECK_THROWS_AS(MarketMakerSimulator(base_config()).run(strategy, mode),
+                        std::invalid_argument);
+    }
+}
 
 TEST_CASE("The simulation is deterministic for a given seed") {
     const SimConfig cfg = base_config();

@@ -64,9 +64,22 @@ struct StepRecord {
     friend bool operator==(const StepRecord&, const StepRecord&) = default;
 };
 
-// Full result of a run: the time series plus end-of-run summary figures.
+enum class SimulationMode { Trace, MetricsOnly };
+
+struct SimMetrics {
+    double max_drawdown = 0.0;
+    double volatility = 0.0;
+    double sharpe = 0.0;
+    double average_inventory = 0.0;
+    std::int64_t max_abs_inventory = 0;
+
+    friend bool operator==(const SimMetrics&, const SimMetrics&) = default;
+};
+
+// Summary figures and, in Trace mode, the full time series.
 struct SimResult {
     std::vector<StepRecord> steps;
+    SimMetrics metrics;
 
     std::int64_t final_inventory = 0;
     std::int64_t final_cash_ticks = 0;
@@ -108,7 +121,7 @@ class MarketMakerSimulator {
 public:
     explicit MarketMakerSimulator(SimConfig config) : config_(config) {}
 
-    SimResult run(Strategy& strategy) const;
+    SimResult run(Strategy& strategy, SimulationMode mode = SimulationMode::Trace) const;
 
     const SimConfig& config() const noexcept { return config_; }
 

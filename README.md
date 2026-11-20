@@ -248,10 +248,19 @@ python -m unittest discover -s viz/tests
 
 # Parameter study (writes study_results.{json,csv} and study_runs.csv)
 mkdir -p results && (cd results && ../build/examples/lob_param_study)
+# Optional worker count: 0 (default) = hardware concurrency, 1 = serial.
+# The output files and row order are identical for every worker count.
+(cd results && ../build/examples/lob_param_study 1)
 
 # Figures from the study output
 python viz/plot_study.py --runs results/study_runs.csv --outdir docs/figures
 ```
+
+Parameter studies use `SimulationMode::MetricsOnly`: returns, drawdown and
+inventory statistics are accumulated during each run without retaining its
+`StepRecord` trace. `MarketMakerSimulator::run` and `Backtester::run` default to
+`SimulationMode::Trace` for callers that need time-series CSVs or plots; pass
+`SimulationMode::MetricsOnly` to omit the trace while retaining the same metrics.
 
 The full research pipeline (build → study → figures) is also wrapped in one
 command:

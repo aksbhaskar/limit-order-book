@@ -8,7 +8,9 @@
 //
 // See benchmarks/README.md for the methodology and workload assumptions.
 
+#include <algorithm>
 #include <cstdint>
+#include <numeric>
 #include <optional>
 #include <random>
 #include <string>
@@ -157,6 +159,35 @@ void apply(MatchingEngine& engine, const Action& action) {
     }
 }
 
+void deep_cancel_benchmarks() {
+    nb::Bench deep;
+    deep.title("limit-order-book").unit("op").epochs(5)
+        .epochIterations(1);
+    for (std::size_t n : {std::size_t{1000}, std::size_t{10000}, std::size_t{100000}}) {
+        std::vector<Order> orders;
+        orders.reserve(n);
+        std::vector<std::size_t> indices(n);
+        std::iota(indices.begin(), indices.end(), std::size_t{0});
+        std::mt19937_64 rng(0xDEECu);
+        std::shuffle(indices.begin(), indices.end(), rng);
+        for (std::size_t i = 0; i < n; ++i) {
+            orders.emplace_back(OrderId{i + 1}, Side::Buy, OrderType::Limit,
+                                Price::from_ticks(kMid), Quantity{1}, Sequence{i + 1});
+        }
+        deep.batch(static_cast<double>(n))
+            .run("deep insert+random cancel (N=" + std::to_string(n) + ")", [&] {
+                OrderBook book;
+                for (const Order& order : orders) {
+                    book.add_order(order);
+                }
+                for (std::size_t i : indices) {
+                    nb::doNotOptimizeAway(book.cancel(orders[i].id()));
+                }
+                nb::doNotOptimizeAway(book);
+            });
+    }
+}
+
 }  // namespace
 
 int main() {
@@ -228,6 +259,23 @@ int main() {
             });
     }
 
+    // The same single-order workload with caller-owned trade storage.
+    {
+        const std::size_t n = 2000;
+        const auto pairs = gen_match_pairs(n, 0xD00Du);
+        bench.batch(static_cast<double>(n))
+            .run("single matching reused result (N=" + std::to_string(n) + ")", [&] {
+                MatchingEngine engine;
+                SubmitResult result;
+                for (const Pair& p : pairs) {
+                    engine.submit(p.maker, result);
+                    engine.submit(p.taker, result);
+                }
+                nb::doNotOptimizeAway(result);
+                nb::doNotOptimizeAway(engine);
+            });
+    }
+
     // 5. Multi-level matching: a single limit taker sweeps K price levels.
     {
         const int k = 64;
@@ -272,5 +320,6 @@ int main() {
             });
     }
 
+    deep_cancel_benchmarks();
     return 0;
 }

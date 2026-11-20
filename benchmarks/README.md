@@ -49,9 +49,18 @@ seeded with a fixed constant.
 | `best bid/ask lookup` | Two `best_bid()`/`best_ask()` reads on a pre-populated 10k-order book | Pure `const` reads; the fastest operation by far. |
 | `insert+cancel cycle (N)` | Inserting *N* orders then cancelling all *N* | You cannot cancel *N* orders without first inserting them, so cancellation is reported as a full cycle. **To isolate cancel cost, subtract the insertion baseline** of the same *N*. |
 | `single-order matching (N)` | Resting a maker and fully filling it with a crossing taker, *N* times | Each unit is one submitted maker + one submitted taker producing one trade; includes the maker insertion. |
+| `single matching reused result (N)` | The identical maker/taker workload with one caller-owned `SubmitResult` reused for every submission | Retains trade-vector capacity between submissions; includes the first allocation in each batch. |
 | `multi-level matching (K)` | One limit taker sweeping *K* resting price levels | Batch is the *K* consumed makers; includes building the *K* levels. |
 | `market-order execution (K)` | One market taker sweeping *K* resting price levels | Same as above with an `OrderType::Market` taker. |
 | `mixed order flow (N)` | A blended feed of *N* actions: ~65% resting limits, ~20% market takers, ~15% cancellations of earlier ids | End-to-end engine throughput on a realistic mix. |
+| `deep insert+random cancel (N)` | Insert 1k, 10k, or 100k orders at one price, then cancel every order in a seeded shuffled order | A full insert+cancel cycle per order; exposes cancellation cost as FIFO queue depth grows. |
+
+The deep-cancellation workloads use five epochs with one complete cycle each,
+rather than the iteration floor used by the other workloads. This keeps a
+100k-order comparison practical even for a linear-scan cancellation baseline.
+Order generation and shuffling are untimed; book construction, insertion,
+cancellation and destruction are timed. Run the suite at least twice to gauge
+noise, especially for the shorter deep-cancellation rows.
 
 ## Interpreting the numbers
 

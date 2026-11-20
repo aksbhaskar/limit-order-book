@@ -92,6 +92,7 @@ struct StudyConfig {
     SimConfig market;                        // base market (seed is overridden per run)
     std::vector<std::uint64_t> seeds{1, 2, 3, 4, 5};
     ParamGridSpec grid;
+    std::size_t threads = 0;                 // 0 = hardware concurrency, 1 = serial
 };
 
 struct StudyResult {

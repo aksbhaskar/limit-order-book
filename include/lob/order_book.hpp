@@ -3,7 +3,8 @@
 #include <cstddef>
 #include <functional>
 #include <map>
-#include <set>
+#include <unordered_map>
+#include <unordered_set>
 #include <vector>
 
 #include "lob/order.hpp"
@@ -54,12 +55,18 @@ struct CancelResult {
 // to the matching engine (a friend) the reduction primitive matching needs.
 // Matching policy itself lives in MatchingEngine; amendment is absent.
 //
-// An id index maps each live order to the (side, price) of the level holding it,
-// so cancellation locates an order without scanning the whole book. Ids of
+// An id index holds stable order and level iterators, so cancellation unlinks
+// an order in expected O(1) time without scanning its FIFO queue. Ids of
 // orders that have been fully filled are remembered so that a cancel for them
 // can be reported distinctly from a cancel for an id that was never seen.
 class OrderBook {
 public:
+    OrderBook() = default;
+    OrderBook(const OrderBook& other);
+    OrderBook& operator=(const OrderBook& other);
+    OrderBook(OrderBook&&) noexcept = default;
+    OrderBook& operator=(OrderBook&&) noexcept = default;
+
     // Adds a resting limit order. Throws std::invalid_argument if the order is
     // not a limit order, or if its id is already present in the book. Price,
     // quantity, and id validity are already guaranteed by Order itself.
@@ -97,10 +104,12 @@ private:
     using BidMap = std::map<Price, PriceLevel, std::greater<Price>>;
     using AskMap = std::map<Price, PriceLevel, std::less<Price>>;
 
-    // Where a live order rests: which side and at which price level.
+    // Only the level iterator for side is used.
     struct Locator {
         Side side{};
-        Price price{};
+        PriceLevel::OrderIterator order{};
+        BidMap::iterator bid_level{};
+        AskMap::iterator ask_level{};
     };
 
     // Fills the FIFO-front order at the best level of `side` by `qty`, removing
@@ -113,8 +122,8 @@ private:
 
     BidMap bids_;
     AskMap asks_;
-    std::map<OrderId, Locator> live_;   // resting order id -> its level location
-    std::set<OrderId> filled_;          // ids of orders fully filled while resting
+    std::unordered_map<OrderId, Locator> live_;   // resting order id -> its level location
+    std::unordered_set<OrderId> filled_;          // ids of orders fully filled while resting
 };
 
 }  // namespace lob

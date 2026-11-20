@@ -39,3 +39,15 @@ TEST_CASE("Orders keep FIFO order: the front is the oldest") {
     CHECK(level.orders().front().id() == OrderId{10});
     CHECK(level.orders().back().id() == OrderId{11});
 }
+
+TEST_CASE("Removing an absent order leaves a price level unchanged") {
+    PriceLevel level(Price::from_units(100));
+    CHECK_THROWS_AS(level.remove(OrderId{1}), std::logic_error);
+    CHECK(level.empty());
+    level.add(limit_order(OrderId{1}, Quantity{5}, Sequence{1}, Price::from_units(100)));
+    CHECK_THROWS_AS(level.remove(OrderId{2}), std::logic_error);
+    CHECK(level.total_quantity() == Quantity{5});
+    CHECK(level.remove(OrderId{1}) == Quantity{5});
+    CHECK(level.empty());
+    CHECK(level.total_quantity() == Quantity{0});
+}

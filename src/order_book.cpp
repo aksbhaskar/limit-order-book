@@ -23,6 +23,30 @@ std::vector<LevelView> collect_depth(const Map& levels, std::size_t max_levels) 
 
 }  // namespace
 
+OrderBook::OrderBook(const OrderBook& other)
+    : bids_(other.bids_), asks_(other.asks_), filled_(other.filled_) {
+    live_.reserve(other.live_.size());
+    for (auto level = bids_.begin(); level != bids_.end(); ++level) {
+        for (auto order = level->second.orders_.begin();
+             order != level->second.orders_.end(); ++order) {
+            live_.emplace(order->id(), Locator{Side::Buy, order, level, {}});
+        }
+    }
+    for (auto level = asks_.begin(); level != asks_.end(); ++level) {
+        for (auto order = level->second.orders_.begin();
+             order != level->second.orders_.end(); ++order) {
+            live_.emplace(order->id(), Locator{Side::Sell, order, {}, level});
+        }
+    }
+}
+
+OrderBook& OrderBook::operator=(const OrderBook& other) {
+    if (this != &other) {
+        *this = OrderBook(other);
+    }
+    return *this;
+}
+
 void OrderBook::add_order(const Order& order) {
     if (order.type() != OrderType::Limit) {
         throw std::invalid_argument("order book only accepts limit orders");
@@ -33,12 +57,13 @@ void OrderBook::add_order(const Order& order) {
 
     if (order.side() == Side::Buy) {
         auto [it, inserted] = bids_.try_emplace(order.price(), order.price());
-        it->second.add(order);
+        const auto handle = it->second.append(order);
+        live_.emplace(order.id(), Locator{Side::Buy, handle, it, {}});
     } else {
         auto [it, inserted] = asks_.try_emplace(order.price(), order.price());
-        it->second.add(order);
+        const auto handle = it->second.append(order);
+        live_.emplace(order.id(), Locator{Side::Sell, handle, {}, it});
     }
-    live_.emplace(order.id(), Locator{order.side(), order.price()});
 }
 
 CancelResult OrderBook::cancel(OrderId id) {
@@ -51,8 +76,8 @@ CancelResult OrderBook::cancel(OrderId id) {
 
     const Locator loc = it->second;
     if (loc.side == Side::Buy) {
-        auto level_it = bids_.find(loc.price);
-        const Quantity removed = level_it->second.remove(id);
+        const auto level_it = loc.bid_level;
+        const Quantity removed = level_it->second.remove(loc.order);
         if (level_it->second.empty()) {
             bids_.erase(level_it);
         }
@@ -60,8 +85,8 @@ CancelResult OrderBook::cancel(OrderId id) {
         return CancelResult{id, CancelStatus::Cancelled, removed};
     }
 
-    auto level_it = asks_.find(loc.price);
-    const Quantity removed = level_it->second.remove(id);
+    const auto level_it = loc.ask_level;
+    const Quantity removed = level_it->second.remove(loc.order);
     if (level_it->second.empty()) {
         asks_.erase(level_it);
     }

@@ -1,10 +1,13 @@
 #include "lob/parameter_study.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <cmath>
+#include <exception>
 #include <iomanip>
 #include <numeric>
 #include <sstream>
+#include <thread>
 
 #include "lob/backtest.hpp"
 #include "lob/inventory_market_maker.hpp"
@@ -29,7 +32,7 @@ BacktestMetrics run_one(StrategyKind kind, const ParamPoint& p, const SimConfig&
         c.max_inventory = p.max_inventory;
         c.order_quantity = Quantity{p.order_quantity};
         FixedSpreadMarketMaker mm(c);
-        return Backtester(market).run(mm);
+        return Backtester(market).run(mm, SimulationMode::MetricsOnly);
     }
     InventoryAwareConfig c;
     c.base_spread = Price::from_ticks(p.spread_ticks);
@@ -38,7 +41,7 @@ BacktestMetrics run_one(StrategyKind kind, const ParamPoint& p, const SimConfig&
     c.skew_ticks_per_unit = p.skew_ticks_per_unit;
     c.widen_ticks_per_unit = 1;
     InventoryAwareMarketMaker mm(c);
-    return Backtester(market).run(mm);
+    return Backtester(market).run(mm, SimulationMode::MetricsOnly);
 }
 
 }  // namespace
@@ -98,7 +101,56 @@ Aggregate Aggregate::of(std::vector<double> samples) {
 StudyResult run_study(const StudyConfig& config) {
     StudyResult out;
     const std::vector<ParamPoint> grid = generate_grid(config.grid);
+    const std::size_t job_count = grid.size() * 2 * config.seeds.size();
+    std::vector<BacktestMetrics> metrics(job_count);
+    const auto run_job = [&](std::size_t job) {
+        const ParamPoint& p = grid[job / (2 * config.seeds.size())];
+        const StrategyKind kind = (job / config.seeds.size()) % 2 == 0
+                                      ? StrategyKind::FixedSpread
+                                      : StrategyKind::InventoryAware;
+        SimConfig market = config.market;
+        market.seed = config.seeds[job % config.seeds.size()];
+        market.transaction_cost_ticks = p.transaction_cost_ticks;
+        metrics[job] = run_one(kind, p, market);
+    };
+    const std::size_t requested = config.threads == 0
+                                      ? std::max(1u, std::thread::hardware_concurrency())
+                                      : config.threads;
+    const std::size_t workers = std::min(requested, job_count);
+    if (workers <= 1) {
+        for (std::size_t job = 0; job < job_count; ++job) {
+            run_job(job);
+        }
+    } else {
+        std::atomic<std::size_t> next_job{0};
+        std::vector<std::exception_ptr> errors(job_count);
+        {
+            std::vector<std::jthread> pool;
+            pool.reserve(workers);
+            for (std::size_t worker = 0; worker < workers; ++worker) {
+                pool.emplace_back([&] {
+                    for (;;) {
+                        const std::size_t job = next_job.fetch_add(1, std::memory_order_relaxed);
+                        if (job >= job_count) {
+                            return;
+                        }
+                        try {
+                            run_job(job);
+                        } catch (...) {
+                            errors[job] = std::current_exception();
+                        }
+                    }
+                });
+            }
+        }
+        for (const auto& error : errors) {
+            if (error) {
+                std::rethrow_exception(error);
+            }
+        }
+    }
 
+    std::size_t job = 0;
     for (const ParamPoint& p : grid) {
         for (const StrategyKind kind :
              {StrategyKind::FixedSpread, StrategyKind::InventoryAware}) {
@@ -106,11 +158,7 @@ StudyResult run_study(const StudyConfig& config) {
             pnl.reserve(config.seeds.size());
 
             for (std::uint64_t seed : config.seeds) {
-                SimConfig market = config.market;
-                market.seed = seed;
-                market.transaction_cost_ticks = p.transaction_cost_ticks;
-
-                const BacktestMetrics m = run_one(kind, p, market);
+                const BacktestMetrics& m = metrics[job++];
                 pnl.push_back(m.total_pnl);
                 sharpe.push_back(m.sharpe);
                 mdd.push_back(m.max_drawdown);

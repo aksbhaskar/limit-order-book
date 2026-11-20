@@ -1,7 +1,8 @@
 #pragma once
 
 #include <cstddef>
-#include <deque>
+#include <iterator>
+#include <list>
 #include <stdexcept>
 
 #include "lob/order.hpp"
@@ -33,12 +34,11 @@ public:
     const Order& front() const { return orders_.front(); }
 
     // All resting orders in priority order (oldest first).
-    const std::deque<Order>& orders() const noexcept { return orders_; }
+    const std::list<Order>& orders() const noexcept { return orders_; }
 
     // Appends an order to the back of the FIFO queue.
     void add(const Order& order) {
-        total_quantity_ = total_quantity_ + order.remaining_quantity();
-        orders_.push_back(order);
+        append(order);
     }
 
     // Outcome of reducing the front order.
@@ -71,18 +71,32 @@ public:
     Quantity remove(OrderId id) {
         for (auto it = orders_.begin(); it != orders_.end(); ++it) {
             if (it->id() == id) {
-                const Quantity removed = it->remaining_quantity();
-                total_quantity_ = total_quantity_ - removed;
-                orders_.erase(it);
-                return removed;
+                return remove(it);
             }
         }
         throw std::logic_error("PriceLevel::remove: order id not at this level");
     }
 
 private:
+    using OrderIterator = std::list<Order>::iterator;
+
+    OrderIterator append(const Order& order) {
+        orders_.push_back(order);
+        total_quantity_ = total_quantity_ + order.remaining_quantity();
+        return std::prev(orders_.end());
+    }
+
+    Quantity remove(OrderIterator order) {
+        const Quantity removed = order->remaining_quantity();
+        total_quantity_ = total_quantity_ - removed;
+        orders_.erase(order);
+        return removed;
+    }
+
+    friend class OrderBook;
+
     Price price_;
-    std::deque<Order> orders_;
+    std::list<Order> orders_;
     Quantity total_quantity_{};
 };
 

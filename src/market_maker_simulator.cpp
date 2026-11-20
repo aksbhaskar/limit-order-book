@@ -2,6 +2,7 @@
 
 #include <cmath>
 #include <cstdint>
+#include <cstdlib>
 #include <optional>
 #include <random>
 
@@ -15,6 +16,63 @@
 namespace lob {
 
 namespace {
+
+class MetricsAccumulator {
+public:
+    explicit MetricsAccumulator(std::int64_t starting_cash)
+        : starting_cash_(starting_cash), prev_equity_(starting_cash), peak_(starting_cash),
+          denom_(starting_cash != 0 ? static_cast<double>(starting_cash) : 1.0) {}
+
+    void add(std::int64_t total_pnl, std::int64_t inventory) {
+        const std::int64_t equity = starting_cash_ + total_pnl;
+        const double r = static_cast<double>(equity - prev_equity_) / denom_;
+        sum_r_ += r;
+        sum_r2_ += r * r;
+        ++count_;
+        prev_equity_ = equity;
+        if (equity > peak_) {
+            peak_ = equity;
+        }
+        if (peak_ > 0) {
+            const double dd = static_cast<double>(peak_ - equity) / static_cast<double>(peak_);
+            if (dd > metrics_.max_drawdown) {
+                metrics_.max_drawdown = dd;
+            }
+        }
+        sum_inv_ += static_cast<long double>(inventory);
+        const std::int64_t abs_inv = std::llabs(inventory);
+        if (abs_inv > metrics_.max_abs_inventory) {
+            metrics_.max_abs_inventory = abs_inv;
+        }
+    }
+
+    SimMetrics finish() const {
+        SimMetrics metrics = metrics_;
+        if (count_ != 0) {
+            metrics.average_inventory =
+                static_cast<double>(sum_inv_ / static_cast<long double>(count_));
+        }
+        if (count_ > 1) {
+            const double mean = sum_r_ / static_cast<double>(count_);
+            const double var = (sum_r2_ / static_cast<double>(count_)) - mean * mean;
+            const double sd = var > 0.0 ? std::sqrt(var) : 0.0;
+            metrics.volatility = sd;
+            metrics.sharpe = sd > 0.0 ? (mean / sd) : 0.0;
+        }
+        return metrics;
+    }
+
+private:
+    std::int64_t starting_cash_;
+    std::int64_t prev_equity_;
+    std::int64_t peak_;
+    double denom_;
+    double sum_r_ = 0.0;
+    double sum_r2_ = 0.0;
+    std::size_t count_ = 0;
+    long double sum_inv_ = 0.0L;
+    SimMetrics metrics_;
+};
 
 // Uniform mid increment in [-vol, +vol] ticks (consumes exactly one draw when
 // vol > 0, zero draws otherwise, keeping the stream strategy-independent).
@@ -64,11 +122,15 @@ SimConfig regime_config(MarketRegime regime) {
     return c;
 }
 
-SimResult MarketMakerSimulator::run(Strategy& strategy) const {
+SimResult MarketMakerSimulator::run(Strategy& strategy, SimulationMode mode) const {
     SimResult result;
-    result.steps.reserve(config_.steps);
+    if (mode == SimulationMode::Trace) {
+        result.steps.reserve(config_.steps);
+    }
+    MetricsAccumulator metrics(config_.starting_cash_ticks);
 
     MatchingEngine engine;
+    SubmitResult submission;
     PnLAccount account(config_.starting_cash_ticks);
     std::mt19937_64 rng(config_.seed);
 
@@ -116,7 +178,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
         if (decision.quote_bid && !decision.bid_quantity.is_zero()) {
             const OrderId id{next_id++};
             engine.submit(Order(id, Side::Buy, OrderType::Limit, decision.bid_price,
-                                decision.bid_quantity, Sequence{next_seq++}));
+                                decision.bid_quantity, Sequence{next_seq++}), submission);
             mm_bid = id;
             ++result.quotes_placed;
             record.quoted_bid = true;
@@ -126,7 +188,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
         if (decision.quote_ask && !decision.ask_quantity.is_zero()) {
             const OrderId id{next_id++};
             engine.submit(Order(id, Side::Sell, OrderType::Limit, decision.ask_price,
-                                decision.ask_quantity, Sequence{next_seq++}));
+                                decision.ask_quantity, Sequence{next_seq++}), submission);
             mm_ask = id;
             ++result.quotes_placed;
             record.quoted_ask = true;
@@ -156,11 +218,11 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
             }
             const Side aggr_side = aggressor_buys ? Side::Buy : Side::Sell;
             const OrderId id{next_id++};
-            const SubmitResult sr = engine.submit(Order(id, aggr_side, OrderType::Limit,
-                                                        Price::from_ticks(limit_ticks),
-                                                        Quantity{aq}, Sequence{next_seq++}));
+            engine.submit(Order(id, aggr_side, OrderType::Limit,
+                                Price::from_ticks(limit_ticks),
+                                Quantity{aq}, Sequence{next_seq++}), submission);
 
-            for (const Trade& trade : sr.trades) {
+            for (const Trade& trade : submission.trades) {
                 Side mm_side;
                 if (mm_bid && trade.maker_id == *mm_bid) {
                     mm_side = Side::Buy;   // our bid was hit: we bought
@@ -182,7 +244,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
 
             // Immediate-or-cancel: drop any unfilled aggressor remainder so it
             // never rests as phantom liquidity.
-            if (sr.resting) {
+            if (submission.resting) {
                 engine.cancel(id);
             }
         }
@@ -195,7 +257,10 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
         record.total_pnl_ticks = account.total_pnl_ticks(mid_price);
         record.fills = step_fills;
         record.filled_quantity = step_qty;
-        result.steps.push_back(record);
+        metrics.add(record.total_pnl_ticks, record.inventory);
+        if (mode == SimulationMode::Trace) {
+            result.steps.push_back(record);
+        }
     }
 
     const Price final_mid = Price::from_ticks(mid);
@@ -204,6 +269,7 @@ SimResult MarketMakerSimulator::run(Strategy& strategy) const {
     result.final_realized_ticks = account.realized_ticks();
     result.final_unrealized_ticks = account.unrealized_ticks(final_mid);
     result.final_total_pnl_ticks = account.total_pnl_ticks(final_mid);
+    result.metrics = metrics.finish();
     return result;
 }
 
